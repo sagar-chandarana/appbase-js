@@ -1,0 +1,1 @@
+browserify appbase.js | uglifyjs > html/appbase-browser.js
