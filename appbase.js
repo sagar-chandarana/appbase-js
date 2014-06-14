@@ -61,6 +61,14 @@ ab.store.obj.parent.getParents = function(childUuid){
 	return ab.store.obj.parent.objs[childUuid].parents;
 }
 
+ab.util.front = function(path){
+    return path.indexOf('/') == -1? path: path.slice(0,path.indexOf('/'));;
+}
+
+ab.util.cutFront = function(path){
+    return path.indexOf('/') == -1? '': path.slice(path.indexOf('/')+1);;
+}
+
 ab.util.postToUrl = function (path, params, method) {
     method = method || "post"; // Set method to post by default if not specified.
 
@@ -331,24 +339,24 @@ ab.util.clone = function (obj){
 	return JSON.parse(JSON.stringify(obj));
 }
 
-ab.util.pathToUuid = function (path,callback,parentUuid){
+ab.util.pathToUuid = function (path,callback,parentUuid,isInner){
+    var isInner = false || isInner;
+	var front = ab.util.front(path);
 
-	var front = path.indexOf('/') == -1? path: path.slice(0,path.indexOf('/'));
+	//var collection = ab.util.parseCollectionFromPath(front);
+	//var key = ab.util.parseKeyFromPath(front);
 
-	var collection = ab.util.parseCollectionFromPath(front);
-	var key = ab.util.parseKeyFromPath(front);
+	if(typeof parentUuid == 'undefined'){ //the path is newly asked and is not a recursive call
 
-	if(typeof parentUuid == 'undefined'){
-
-		if( path == front){
+		if( path == front+'/'+ab.util.front(ab.util.cutFront(path))){
 			//unique key
-			callback(false,key);
+			callback(false,ab.util.front(ab.util.cutFront(path))); //second element is key
 			return;
 		}
 		else{ //fetch front uuid
-			ab.util.pathToUuid(front,function(orgPath,orgCallback){
+			ab.util.pathToUuid(front+'/'+ab.util.front(ab.util.cutFront(path)),function(orgPath,orgCallback){
 				return function (err,frontUuid){ // for front err = always false
-					var newPath = orgPath.indexOf('/') == -1? '': orgPath.slice(path.indexOf('/')+1); //cut front
+					var newPath =  ab.util.cutFront(ab.util.cutFront(path)); //cut front, twice as it was unique obj
 					ab.util.pathToUuid(newPath,orgCallback,frontUuid);
 					return;
 				};
@@ -373,16 +381,16 @@ ab.util.pathToUuid = function (path,callback,parentUuid){
 									return;
 								}
 
-								var newFront = orgPath.indexOf('/') == -1? orgPath: orgPath.slice(0,orgPath.indexOf('/'));
-								var newCollection = ab.util.parseCollectionFromPath(front);
-								var newKey = ab.util.parseKeyFromPath(front);
+								//var newFront = orgPath.indexOf('/') == -1? orgPath: orgPath.slice(0,orgPath.indexOf('/'));
+								//var newCollection = ab.util.parseCollectionFromPath(front);
+								var newKey = front;
 
-								if(typeof parentObj.links[newCollection] == 'undefined' || typeof parentObj.links[newCollection][newKey] == 'undefined' ) {
+								if(typeof parentObj.links[newKey] == 'undefined' ) {
 									orgCallback(false,false);
 									return;
 								}
-								var newParentUuid = parentObj.links[newCollection][newKey];
-								var newPath = orgPath.indexOf('/') == -1? '': orgPath.slice(path.indexOf('/')+1); //cut front
+								var newParentUuid = parentObj.links[newKey];
+								var newPath = ab.util.cutFront(orgPath); //cut front
 								ab.util.pathToUuid(newPath,orgCallback,newParentUuid,parentObj,newKey);
 								//ab.util.pathToUuid(newPath,orgCallback,newParentUuid);
 							}
@@ -419,17 +427,18 @@ ab.util.compare = function (obj1,obj2){
 	}
 	*/
 }
-
+/*
 ab.util.parseCollectionFromPath = function (Path){
 	var temp = Path.slice(Path.lastIndexOf('/')+1);
 	temp = temp.lastIndexOf(':')== -1 ? temp.slice(temp.lastIndexOf('@')+1): temp.slice(temp.lastIndexOf('@')+1,temp.lastIndexOf(':'));
 	return temp
 }
-
+*/
 ab.util.isNumber = function (n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 }
 
+/*
 ab.util.parseKeyFromPath = function (Path){
 	return Path.lastIndexOf(':') == -1? '': Path.slice(Path.lastIndexOf(':')+1);
 }
@@ -439,7 +448,7 @@ ab.util.parseGroupCollectionFromPath = function (Path){
 	temp = temp.slice(0,temp.lastIndexOf(':'));
 	return temp
 }
-
+*/
 ab.util.parseOrderFromUuid = function(linkName){
 	var temp = linkName.slice(0,linkName.indexOf(':'));
 	if(ab.util.isNumber(temp)){
@@ -468,7 +477,7 @@ var AppbaseObj = function (obj){
 
 	this.links = {};
 	this.linksUuid = {};
-	this.linksOrdered = {};
+	this.linksOrdered = [];
 
 	this.listeners = {
 		link_added:{},
@@ -509,13 +518,13 @@ AppbaseObj.prototype.generateSelfObj = function(){
 
 	obj.collection = this.collection;
 
-	for (var oldLinkCollection in this.linksOrdered){
+	//for (var oldLinkCollection in this.linksOrdered){
 		//console.log(this.linksOrdered[oldLinkCollection])
-		for (var i = 0;i< this.linksOrdered[oldLinkCollection].length;i++){
-			var oldLinkKey = this.linksOrdered[oldLinkCollection][i];
-			obj[oldLinkCollection+':'+oldLinkKey] = i.toString()+':'+this.links[oldLinkCollection][oldLinkKey];
+		for (var i = 0;i< this.linksOrdered.length;i++){
+			var oldLinkKey = this.linksOrdered[i];
+			obj[oldLinkKey] = i.toString()+':'+this.links[oldLinkKey];
 		}
-	}
+	//}
 
 	return obj;
 }
@@ -539,12 +548,10 @@ AppbaseObj.prototype.setNewSelfObj = function(obj){
 			var splicedUuid = obj[newLink].slice(obj[newLink].indexOf(':')+1)
 		}
 
-		var newLinkCollection = ab.util.parseCollectionFromPath(newLink)
-		var newLinkKey = ab.util.parseKeyFromPath(newLink)
+		//var newLinkCollection = ab.util.parseCollectionFromPath(newLink)
+		var newLinkKey = newLink
 
-
-
-		if (typeof this.links[newLinkCollection] == 'undefined' || typeof this.links[newLinkCollection][newLinkKey] == 'undefined')
+		if (typeof this.links[newLinkKey] == 'undefined')
 			this.addLink(newLink,splicedUuid,order);
 		//todo: if link uuid has been changed
 	}
@@ -559,11 +566,11 @@ AppbaseObj.prototype.setNewSelfObj = function(obj){
 	}*/
 
 
-	for (var oldLinkCollection in this.links){
-		for (var oldLinkKey in this.links[oldLinkCollection])
-			if (typeof obj[oldLinkCollection+':'+oldLinkKey] == 'undefined')
-				this.removeLink(oldLinkCollection+':'+oldLinkKey);
-	}
+	//for (var oldLinkCollection in this.links){
+		for (var oldLinkKey in this.links)
+			if (typeof obj[oldLinkKey] == 'undefined')
+				this.removeLink(oldLinkKey);
+	//}
 }
 
 AppbaseObj.prototype.setProps = function(prop){
@@ -577,34 +584,35 @@ AppbaseObj.prototype.setProps = function(prop){
 AppbaseObj.prototype.addLink = function(linkName,uuid,noFire,order){
 	noFire = false || noFire;
 
-	var linkCollection = ab.util.parseCollectionFromPath(linkName);
-	var linkGroupC =  ab.util.parseGroupCollectionFromPath(linkName);
-	var linkKey = ab.util.parseKeyFromPath(linkName);
+    this.links[linkName] = uuid;
+	//var linkCollection = ab.util.parseCollectionFromPath(linkName);
+	//var linkGroupC =  ab.util.parseGroupCollectionFromPath(linkName);
+	//var linkKey = ab.util.parseKeyFromPath(linkName);
 
-	if(typeof this.links[linkCollection] == 'undefined'){
-		this.links[linkCollection] = {};
-		this.linksOrdered[linkCollection] = [];
-    }
-	else {
-		if(this.links[linkCollection][linkKey] == uuid)
-			return; //link already exists
-	}
+	//if(typeof this.links[linkCollection] == 'undefined'){
+		//this.links[linkCollection] = {};
+		//this.linksOrdered[linkCollection] = [];
+    //}
+	//else {
+		//if(this.links[linkCollection][linkKey] == uuid)
+		//	return; //link already exists
+	//}
 
-	this.links[linkCollection][linkKey] = uuid;
+	//this.links[linkCollection][linkKey] = uuid;
 	this.linksUuid[uuid] = linkName;
 
 	if(typeof order != 'undefined'){
-		if(typeof this.linksOrdered[linkCollection][order] == 'undefined')
-			this.linksOrdered[linkCollection][order] = linkKey;
+		if(typeof this.linksOrdered[order] == 'undefined')
+			this.linksOrdered[order] = linkName;
 		else
-			this.linksOrdered[linkCollection].splice(order,0,linkKey);
+			this.linksOrdered.splice(order,0,linkName);
 	}
 	else{
-		this.linksOrdered[linkCollection].unshift(linkKey);
+		this.linksOrdered.unshift(linkName);
 	}
 
 
-	ab.store.obj.parent.addParent(uuid,this,linkKey);
+	ab.store.obj.parent.addParent(uuid,this,linkName);
 
 	/*
 	var thisRef = this;
@@ -617,6 +625,8 @@ AppbaseObj.prototype.addLink = function(linkName,uuid,noFire,order){
 		this.fire('link_added',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
 
 }
+
+
 
 AppbaseObj.prototype.fire = function(event,obj){
 	//console.log('firing:'+event)
@@ -669,22 +679,23 @@ AppbaseObj.prototype.removeLinkUuid = function(uuid){
 
 AppbaseObj.prototype.removeLink = function(linkName){
 
-	var linkCollection = ab.util.parseCollectionFromPath(linkName);
-	var linkGroupC =  ab.util.parseGroupCollectionFromPath(linkName);
-	var linkKey = ab.util.parseKeyFromPath(linkName);
+	//var linkCollection = ab.util.parseCollectionFromPath(linkName);
+	//var linkGroupC =  ab.util.parseGroupCollectionFromPath(linkName);
+	//var linkKey = ab.util.parseKeyFromPath(linkName);
 
 
 
-	if(typeof this.links[linkCollection] == 'undefined' || typeof this.links[linkCollection][linkKey] == 'undefined' )
-		return;
-	var uuid = this.links[linkCollection][linkKey]
+	//if(typeof this.links[linkCollection] == 'undefined' || typeof this.links[linkCollection][linkKey] == 'undefined' )
+		//return;
+	var uuid = this.links[linkName]
+    if (typeof uuid == 'undefined')
+        return;
 
-
-	delete this.links[linkCollection][linkKey];
+	delete this.links[linkName];
 	delete this.linksUuid[uuid];
 
-	var order = this.linksOrdered[linkCollection].indexOf(linkKey);
-	this.linksOrdered[linkCollection].splice(order,1);
+	var order = this.linksOrdered.indexOf(linkKey);
+	this.linksOrdered.splice(order,1);
 
 	ab.store.obj.parent.removeParent(uuid,this);
 
@@ -703,13 +714,12 @@ var AppbaseRef = function(path,dontFetch){
 	this.refId = ab.util.uuid(); //this id is used to make this ref a unique identity, which will be used to add/remove listeners
 
 	var isAPath = false;
-	if (this.path == ab.util.parseCollectionFromPath(this.path)){
+	if (this.path == ab.util.front(this.path)){
 		var id = ab.util.uuid();
-		this.path = this.path+":"+id;
-
+		this.path = this.path+"/"+id;
 	}
 
-	if(path.indexOf('/')>=0){
+	if(ab.util.cutFront(ab.util.cutFront(path)).indexOf('/')>=0){
 		isAPath = true;
 	}
 
@@ -735,7 +745,7 @@ var AppbaseRef = function(path,dontFetch){
 					if(isAPath){
 						ab.store.obj.get.now(uuid,false,function(err,obj){ if(!obj) throw new Error(path+": Path doesn't exist");});
 					} else {
-						ab.store.obj.get.now(uuid,ab.util.parseCollectionFromPath(path),function(){});
+						ab.store.obj.get.now(uuid,ab.util.front(path),function(){});
 					}
 				} else{
 					throw new Error(path+": Path doesn't exist");
@@ -844,11 +854,13 @@ AppbaseRef.prototype.set= function(prop,val){
 	return this;
 }
 
+/*
 AppbaseRef.prototype.getTree = function (levels,cb){
 	ab.util.getTreePro(levels,this).then(function(tree){
 		cb(tree);
 	});
 }
+*/
 
 AppbaseRef.prototype.get= function(prop,cb){
 	if( typeof prop == typeof (function(){})) {
@@ -935,7 +947,8 @@ AppbaseRef.prototype.addLink= function(linkKey,abRef){
 
 	var linkPath = abRef.getPath();
 	var linkCollection = ab.util.parseCollectionFromPath(linkPath);
-	var linkName = linkCollection+':'+linkKey;
+	//var linkName = linkCollection+':'+linkKey;
+    var linkName = linkKey;
 
 	Promise.all([this.getPath(),linkPath].map(function (path){return ab.util.pathToUuidPro(path)}))
 	.then(function (uuids){
@@ -1112,6 +1125,9 @@ Appbase.search = function( query, dn) {
    scr.src = path+"search?callback="+uuidFunc+"&collection="+query.collection+"&property="+query.property+"&sstring="+query.sstring;
    document.body.appendChild(scr);
 } */
-abR = Appbase.ref('User:sagarlolol');
-abR.on('value_changed',function(obj){console.log(obj)});
-abR.set('val','pro');
+//abR = Appbase.ref('User:sagarlolol');
+//abR.on('value_changed',function(obj){console.log(obj)});
+//abR.set('val','pro');
+
+ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
+
