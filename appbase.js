@@ -83,28 +83,6 @@ ab.util.cutFront = function(path){
     return path.indexOf('/') == -1? '': path.slice(path.indexOf('/')+1);
 }
 
-ab.util.postToUrl = function (path, params, method) {
-    method = method || "post"; // Set method to post by default if not specified.
-
-    // The rest of this code assumes you are not using a library.
-    // It can be made less wordy if you use one.
-    var form = document.createElement("form");
-    form.setAttribute("method", method);
-    form.setAttribute("action", path);
-    for(var key in params) {
-        if(params.hasOwnProperty(key)) {
-            var hiddenField = document.createElement("input");
-            hiddenField.setAttribute("type", "hidden");
-            hiddenField.setAttribute("name", key);
-            hiddenField.setAttribute("value", params[key]);
-
-            form.appendChild(hiddenField);
-         }
-    }
-    document.body.appendChild(form);
-    form.submit();
-}
-
 ab.auth.login = function (uid,pwd,callback){
 	/*
 	req = new XMLHttpRequest();
@@ -235,35 +213,6 @@ ab.net.putByUuid = function(obj, done) {
 	done(false);
 }
 
-/*
-ab.net.getByUuid = function (uuid,callback){
-	/* callback function(err,obj).
-	err - true/false (only network error).
-	obj - false in case of err or uuid not found.
-	*
-
-	//TODO: ab.net.listenToUuid(collection,uuid,obj){}
-
-	callback(false,false);
-}
-
-ab.net.putByUuid = function (obj,callback){
-	//console.log(obj);
-	//uuid = obj.id
-	//collection = obj.collection
-	/*
-		callback function(err).
-	*
-	callback(false);
-}
-
-
-ab.net.listenToUuid = function (uuid,callback){
-	//callback err(network),obj
-
-	callback(false,false);
-} */
-
 ab.util.getTreePro = function (levels,selfRef){
 	//console.log(levels,baseUuid)
 	return new Promise(
@@ -328,36 +277,12 @@ ab.util.getTreePro = function (levels,selfRef){
 	);
 };
 
-//treePro = ab.util.getTreePro;
-/*
-ab.util.getTree = function (levels,baseUuid,callback){
-	if (levels < 1)
-		return null;
-	if (levels == 1)
-		return ab.util.clone(ab.store.obj.storage[baseUuid].properties);
-
-	var obj = ab.util.clone(ab.store.obj.storage[baseUuid].properties);
-
-
-		for (var linkKey in ab.store.obj.storage[baseUuid].links[linkCollection]){
-			obj['@'+linkCollection][linkKey] = ab.util.createSnapshot(levels-1, ab.store.obj.storage[baseUuid].links[linkCollection][linkKey]);
-		}
-	}
-
-	return ab.util.clone(obj);
-}
-*/
-//ab.util.getTreePro = Promise.denodeify(ab.util.getTree);
-
 ab.util.clone = function (obj){
 	return JSON.parse(JSON.stringify(obj));
 }
 
 ab.util.pathToUuid = function (path,callback,parentUuid){
 	var front = ab.util.front(path);
-
-	//var collection = ab.util.parseCollectionFromPath(front);
-	//var key = ab.util.parseKeyFromPath(front);
 
 	if(typeof parentUuid == 'undefined'){ //the path is newly asked and is not a recursive call
 
@@ -375,50 +300,43 @@ ab.util.pathToUuid = function (path,callback,parentUuid){
 				};
 			}(path,callback));
 		}
-	} else{ //we have the parentUuid and a path.
-		//if(path == ''){ //we came to the end
-		//	callback(false,parentUuid);
-		//	return;
-		//} else {
-			//console.log('here fetching:'+parentUuid);
-			ab.store.obj.get.now(parentUuid,false,function(orgPath,orgCallback){
-					return function(err,parentObj){
-						if(!err){
-							if(!parentObj){ //path not found
-								orgCallback(false,false);
-								return;
-							} else{
+	} else{
+        ab.store.obj.get.now(parentUuid,false,function(orgPath,orgCallback){
+                return function(err,parentObj){
+                    if(!err){
+                        if(!parentObj){ //path not found
+                            orgCallback(false,false);
+                            return;
+                        } else{
 
-								if(orgPath == ''){ //we came to the end
-									orgCallback(false,parentObj.id);
-									return;
-								}
+                            if(orgPath == ''){ //we came to the end
+                                orgCallback(false,parentObj.id);
+                                return;
+                            }
 
-								var newKey = front;
+                            var newKey = front;
 
-								if(typeof parentObj.links[newKey] == 'undefined' ) {
-									orgCallback(false,false);
-									return;
-								}
+                            if(typeof parentObj.links[newKey] == 'undefined' ) {
+                                orgCallback(false,false);
+                                return;
+                            }
 
-								var newVal = parentObj.links[newKey];
+                            var newVal = parentObj.links[newKey];
 
-                                if (typeof newVal == typeof new Object()){
-                                    var newPath = ab.util.cutFront(orgPath); //cut front
-                                    ab.util.pathToUuid(newPath,orgCallback,newVal.uuid);
-                                }
-                                else {
-                                    orgCallback(false,false); //as its a property
-                                }
-								//ab.util.pathToUuid(newPath,orgCallback,newParentUuid);
-							}
-						} else{
-							orgCallback(err,false);
-							return;
-						}
-					};
-			}(path,callback));
-		//}
+                            if (typeof newVal == typeof new Object()){
+                                var newPath = ab.util.cutFront(orgPath); //cut front
+                                ab.util.pathToUuid(newPath,orgCallback,newVal.uuid);
+                            }
+                            else {
+                                orgCallback(false,false); //as its a property
+                            }
+                        }
+                    } else{
+                        orgCallback(err,false);
+                        return;
+                    }
+                };
+        }(path,callback));
 
 	}
 }
@@ -431,6 +349,7 @@ ab.util.uuid = function (){
 		return v.toString(16);
 	});
 }
+
 ab.util.compare = function (obj1,obj2){
 
 	/*
@@ -461,11 +380,11 @@ var AppbaseObj = function (obj){
     this.changed = {};
 
 	this.listeners = {
-		link_added:{},
+		object_added:{},
 		link_removed:{},
 		value_changed:{},
 		subtree_changed:{},
-		link_changed:{}
+		object_changed:{}
 	};
 
 	this.setSelfObj(obj);
@@ -511,9 +430,12 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
 	}
 
     if(isNew){
+
         for (var prop in this.links)
             if (! newProps[prop])
                 this.removeLink(prop,true);
+
+        //TODO: fire as new
     }
 
     //TODO: fire value
@@ -532,16 +454,6 @@ AppbaseObj.prototype.generateSelfObj = function(){
 
 	return obj;
 }
-
-
-/*
-AppbaseObj.prototype.setProps = function(prop){
-	for (var x in prop) {
-		this.properties[x] = prop[x];
-	}
-	this.fire('value_changed',ab.util.clone(this.properties));
-}
-*/
 
 AppbaseObj.prototype.addLink = function(linkName,val,noFireOnVal,order){
 	noFireOnVal = false || noFireOnVal;
@@ -576,44 +488,31 @@ AppbaseObj.prototype.addLink = function(linkName,val,noFireOnVal,order){
     if (typeof val == typeof new Object())
 	    ab.store.obj.parent.addParent(val.uuid,this,linkName);
 
-    this.fire('link_added',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid));
+    this.fire('object_added',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid));
 
 	if(!noFireOnVal)
-		this.fire('value_changed',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+		this.fire('value',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
 
 }
 
 AppbaseObj.prototype.fire = function(event,obj){
-	//console.log('firing:'+event)
-	//console.log(obj)
+
 	for (var refId in this.listeners[event]){
 		if(this.listeners[event][refId])
 			setTimeout(this.listeners[event][refId].bind(undefined,obj),0);
 	}
 
 	switch(event){
-		case 'value_changed':
+		case 'value':
 			for (var id in ab.store.obj.parent.getParents(this.id)){
-				ab.store.obj.parent.getParents(this.id)[id].parent.fire('link_changed',Appbase.ref(this.collection+':'+this.id))
+				ab.store.obj.parent.getParents(this.id)[id].parent.fire('object_changed',Appbase.ref(this.collection+':'+this.id))
 			}
-		break;
-		case  'link_changed':
-		case  'link_added':
-		case  'link_removed':
-			this.fire('subtree_changed',[obj[0],event]);
-			//this.fire('link_changed',[obj[0],event]);
-			/*
-			for (var id in ab.store.obj.parent.getParents(this.id)){
+		    break;
 
-				ab.store.obj.parent.getParents(this.id)[id].parent.fire('subtree_changed',[this.collection+':'+ab.store.obj.parent.getParents(this.id)[id].forKey+'/'+obj[0],event])
-			}*/
-		//break;
-
-		case  'subtree_changed':
-			for (var id in ab.store.obj.parent.getParents(this.id)){
-				ab.store.obj.parent.getParents(this.id)[id].parent.fire('subtree_changed',[this.collection+':'+ab.store.obj.parent.getParents(this.id)[id].forKey+'/'+obj[0],obj[1]])
-			}
-		break;
+		case  'object_changed':
+		case  'object_added':
+		case  'object_removed':
+    		break;
 
 		default:
 			break;
@@ -641,10 +540,10 @@ AppbaseObj.prototype.removeLink = function(linkName,noFireOnVal){
     if(typeof val == typeof new Object())
 	    ab.store.obj.parent.removeParent(val.uuid,this);
 
-	this.fire('link_removed',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+	this.fire('object_removed',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
 
     if(!noFireOnVal)
-        this.fire('value_changed',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+        this.fire('value',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
 }
 
 var AppbaseRef = function(path,dontFetch){
@@ -689,34 +588,6 @@ Appbase.new = function(arg){
 	return new AppbaseRef(arg);
 }
 
-/*
-AppbaseRef.prototype.getLinks = function(collection,levels,limit,callback){
-	this.getTree(1,function(treeObj){
-		var pros = [];
-		if(typeof treeObj.$links.$ordered[collection] == 'undefined'){
-			treeObj.$links.$ordered[collection] = [];
-		}
-
-		for(var i = 0;i<limit && treeObj.$links.$ordered[collection].length;i++){
-			treeObj.$links.$ordered[collection][i].$ref.get
-		}
-		Promise.all(treeObj.$linksOrdered.$)
-
-	})
-	this.uuidPro().then(function(uuid){
-			return ab.util.getTreePro(levels,uuid);
-	}).then(function(treeObj){
-		var arry = [];
-		for(var x in treeObj['@'+collection]){
-			treeObj['@'+collection][x]['_id'] = x;
-			arry.push(treeObj['@'+collection][x]);
-		};
-		callback(arry);
-	})
-}
-*/
-
-
 AppbaseRef.prototype.uuidPro = function(){
 	return ab.util.pathToUuidPro(this.getPath()).then(function(uuid){ return uuid; });
 }
@@ -730,18 +601,6 @@ AppbaseRef.prototype.linkRef = function (path){
 		isACollection = true;
 	return new AppbaseRef(this.path+'/'+path)
 }
-
-/*
-AppbaseRef.prototype.countLinks = function(collection,cb){
-
-	this.uuidPro().then(function(uuid) {
-		return ab.store.obj.get.nowPro(uuid,false)
-	}).then(function(obj){
-		cb(Object.keys(obj[links][collection]).length);
-	});
-
-}
-*/
 
 AppbaseRef.prototype.getPath = function(){
 	return this.path;
@@ -818,7 +677,7 @@ AppbaseRef.prototype.on= function(event,fun,levels){
 	var thisRef = this;
 	this.uuid(function(collection, listenObj){
 		return function(err,uuid){
-			if (listenObj[0] =='link_changed' || listenObj[0] == 'subtree_changed'){
+			if (listenObj[0] =='object_changed' || listenObj[0] == 'subtree_changed'){
 				ab.util.getTreePro(typeof listenObj[3] == 'undefined'? 2: listenObj[3],thisRef);
 			}
 
@@ -876,41 +735,6 @@ AppbaseRef.prototype.addLink= function(linkKey,abRef){
 		ab.store.obj.put.nowId(objs[0].id);
 	});
 
-	/*
-	ab.util.pathToUuid(linkPath,function(linkName,linkPath,thisRef){
-		return function(err,linkUuid){
-			var linkCollection = ab.util.parseCollectionFromPath(linkName);
-			var linkKey = ab.util.parseKeyFromPath(linkName) ;
-			if(linkKey == '')
-				linkKey = ab.util.parseKeyFromPath(linkPath);
-				linkName = linkCollection+':'+linkKey;
-
-			if(linkCollection != ab.util.parseCollectionFromPath(linkPath)){
-				throw new Error("Collections don't match.");
-				return;
-			}
-			else { //success
-				ab.store.obj.get.now(linkUuid,false,function(linkName,linkPath,thisRef){
-					return function(err,refObj){
-						thisRef.uuid(function(linkName,refObj){
-							return function(err,thisUuid){
-								ab.store.obj.get.now(thisUuid,false,function(linkName,refObj){
-									return function(err,thisObj){
-										refObj.addParent(ab.store.obj.storage[thisObj.id],ab.util.parseKeyFromPath(linkName));
-										thisObj.addLink(linkName,refObj.id);
-										ab.store.obj.put.nowId(thisObj.id);
-									}
-								}(linkName,refObj));
-							}
-						}(linkName,refObj,thisRef.collection));
-
-					}
-				}(linkName,linkPath,thisRef));
-			}
-		};
-	}(linkName,linkPath,this));
-	*/
-
 }
 
 AppbaseRef.prototype.removeLink= function(abRef){
@@ -923,128 +747,7 @@ AppbaseRef.prototype.removeLink= function(abRef){
 		ab.store.obj.put.nowId(objs[0].id);
 	});
 
-	/*
-	this.uuidPro().then(
-		function(uuid){
-			return ab.store.obj.get.nowPro(uuid,false);
-		}
-	).then(
-		function(obj){
-			obj.removeLink(linkName);
-			ab.store.obj.put.nowId(obj.id);
-		}
-	)
-	*/
 }
-
-
-//test
-
-
-//console.log(ab.util.parseCollectionFromPath('Tweet:s'))
-//AbO.setProps({lala:"mama"});
-//laafasf = AbO.generateSelfObj;
-//laafasf["Tweet:asfasf"] = "zdsrhzdth"
-//AbO.setNewSelfObj(laafasf);
-//delete laafasf["Tweet:asfasf"]
-//AbO.setNewSelfObj(laafasf);
-//setTimeout(AbO.setNewSelfObj.bind(AbO,laafasf),5000);
-
-
-//ab.auth.login('sdfSD','SDFSDF');
-//abR = new Appbase.ref.('User:sagar/Tweet:ABC');
-
-//abR.set('as','asdd');
-
-/*
-abR.on('subtree_changed',function(obj){
-	console.log(obj);
-});
-
-ab21 = new Appbase.ref.('User:faad');
-
-
-abR.addLink('User',ab21.getPath());
-
-ab21.addLink('Tweet',(new Appbase.ref.('Tweet:123')).getPath())
-
-
-abRNew = new Appbase.ref.('User:sagar/User:faad');
-
-
-ab3 = new Appbase.ref.('Tweet:123')
-
-abRNew.on('subtree_changed',function(obj){
-	console.log(obj);
-});
-
-ab3.set('asd','rezdybry5')
-*/
-//console.log(abR.getSnapshot(8));
-
-/*
-abR = new Appbase.ref.('User:sagar');
-
-abR.on('link_removed',function(obj){
-	console.log(obj);
-})
-
-abc =  new Appbase.ref.('User:faad');
-
-
-
-abR.addLink('User',abc.getPath())
-setTimeout(function () {abR.removeLink('User:faad')},2000);
-
-
-
-
-
-//uuidPro(abR.getPath()).then(console.log)
-*/
-
-
-
-
-
-
-//signup(ab.net.server+'signup', "sagar", "pass", function(){
-	//authenticate(ab.net.server+'login', "sagar", "pass", function(){
-
-	//});
-//});
-//authenticate(ab.net.server+'login', "abc@d.com", "pass", callback);
-/*
-window['abFuncs'] = {};
-Appbase.search = function( query, dn) {
-	var path = ab.net.server;
-	var uuidFunc = 'fchut'+ab.util.uuid().replace(/-/g,'');
-	var closure = function(dn,uuidFunc){
-		//console.log('asf')
-		return function(uuids){
-			//console.log(uuids);
-			delete window[uuidFunc];
-			//uuids = ['sagar']
-			Promise.all(uuids.map(function (uuid) {  return ab.store.obj.get.nowPro(uuid,false)})).then(function(objs){
-				//console.log(objs);
-				var refArray = [];
-				objs.forEach(function(obj){
-					refArray.push(Appbase.ref(obj.collection+':'+obj.id));
-				});
-				dn(refArray);
-			});
-		}
-	}
-
-	window[uuidFunc] = closure(dn,uuidFunc);
-   var scr = document.createElement("script");
-   scr.type = "text/javascript";
-   scr.src = path+"search?callback="+uuidFunc+"&collection="+query.collection+"&property="+query.property+"&sstring="+query.sstring;
-   document.body.appendChild(scr);
-} */
-//abR = Appbase.ref('User:sagarlolol');
-//abR.on('value_changed',function(obj){console.log(obj)});
-//abR.set('val','pro');
 
 ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
 
