@@ -14,6 +14,10 @@ if (!Object.keys) {
     };
 }
 
+Object.isEmpty = function (obj) {
+    return Object.keys(obj).length === 0;
+}
+
 //Name space
 var ab = {
 	util:{},
@@ -22,7 +26,10 @@ var ab = {
 	},
 	pro:{},
 	auth:{},
+    events:{},
 	store:{
+        listeners:{},
+        rootpath: {},
 		obj:{
 			put:{
 				q:{
@@ -40,11 +47,101 @@ var ab = {
 	}
 };
 
+ab.events.types = {
+    extern: {
+        object_added:"object_added",
+        object_removed:"object_removed",
+        value:"value",
+        object_changed:"object_changed"
+    },
+    intern: {
+        object_added:"object_added",
+        object_removed:"object_removed",
+        value:"value",
+        value_arrived:"value_arrived",
+        object_changed:"object_changed"
+    }
+}
+
+ab.events.initForPath = function(path){
+    if (typeof ab.store.listeners[path] == 'undefined'){
+        ab.store.listeners[path] = {};
+
+        for(var event in ab.events.extern){
+            ab.store.listeners[path][ab.events.extern[event]] = {};
+        }
+    }
+}
+
+ab.events.fireIntern = function(intEvent,uuid){
+    switch(intEvent){
+        case ab.events.intern.value:
+            ab.events.fireExtern(ab.events.extern.value,uuid);
+            for (var id in ab.store.obj.parent.getParents(uuid)){
+                ab.events.intern.fire(ab.events.intern.object_changed,id);
+            }
+            break;
+
+        case ab.events.intern.value_arrived:
+            ab.events.fireExtern(ab.events.extern.value,uuid);
+            break;
+
+        case ab.events.intern.object_changed:
+            ab.events.fireExtern(ab.events.extern.object_changed,uuid);
+            break;
+
+        case ab.events.intern.object_added:
+            ab.events.fireExtern(ab.events.extern.object_added,uuid);
+            break;
+
+        case ab.events.intern.object_removed:
+            ab.events.fireExtern(ab.events.extern.object_removed,uuid);
+            break;
+
+        default:
+            break;
+    }
+}
+
+ab.events.fireExtern = function(extEvent,uuid){
+
+    var paths = ab.util.uuidToPaths(uuid);
+    for(var i=0; i<paths.length;i++) {
+        var path = paths[0];
+
+        for (var refId in ab.store.listeners[path][extEvent]){
+            if(ab.store.listeners[path][extEvent][refId])
+                setTimeout(ab.store.listeners[path][extEvent][refId].bind(undefined,obj),0);
+        }
+    }
+
+
+}
+
 ab.store.obj.parent.addParent = function(childUuid,parentObj,k){
 	if(typeof ab.store.obj.parent.objs[childUuid] == 'undefined'){
 		ab.store.obj.parent.objs[childUuid] = {	parents: {} }
 	}
 	ab.store.obj.parent.objs[childUuid].parents[parentObj.id] = {parent:parentObj,forKey:k};
+}
+
+ab.util.uuidToPaths = function(uuid){
+    if(Object.isEmpty(ab.store.obj.parent.getParents(uuid)) ){
+        // root object
+        return [ab.store.rootpath[uuid]];
+    }
+
+    var paths = [];
+
+    var parents =  ab.store.obj.parent.getParents(uuid);
+    for(var parent in parents){
+        var parent_paths = ab.util.uuidToPaths(parent);
+        for(var i=0;i<parent_paths.length;i++){
+            paths.push(parents[parent].forKey +"/" + parent_paths[i]);
+        }
+    }
+
+    return paths;
 }
 
 ab.store.obj.parent.removeParent = function(childUuid,parentObj){
@@ -127,8 +224,6 @@ ab.store.obj.get.now = function(uuid,createNew,callback){
 
 					if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
 						//real patcher
-						//console.log('patching')
-						//console.log(obj)
 						ab.store.obj.storage[obj.id].setSelfObj(obj,true);
 					} else { //get requests
 						while(ab.store.obj.get.noRq[uuid].length){
@@ -286,9 +381,11 @@ ab.util.pathToUuid = function (path,callback,parentUuid){
 
 	if(typeof parentUuid == 'undefined'){ //the path is newly asked and is not a recursive call
 
-		if( path == front+'/'+ab.util.front(ab.util.cutFront(path))){
-			//unique key
-			callback(false,ab.util.front(ab.util.cutFront(path))); //second element is key
+        var _2nd = ab.util.front(ab.util.cutFront(path));
+		if( path == front+'/'+_2nd){//unique key
+
+            ab.store.rootpath[_2nd] = path;
+			callback(false,_2nd); //second element is key
 			return;
 		}
 		else{ //fetch front uuid
@@ -379,32 +476,24 @@ var AppbaseObj = function (obj){
 	this.linksOrdered = [];
     this.changed = {};
 
-	this.listeners = {
-		object_added:{},
-		link_removed:{},
-		value_changed:{},
-		subtree_changed:{},
-		object_changed:{}
-	};
-
 	this.setSelfObj(obj);
 }
 
 AppbaseObj.prototype.setSelfObj = function(obj,isNew){
     isNew = false || isNew;
+    var fireNewValue = false;
 
     if(!isNew) {
         this.id = obj.id;
         this.collection = obj.collection;
     } else {
-        var objs_changed = JSON.parse(obj['changed']);
+        this.changed = JSON.parse(obj['changed']);
         var newProps = {};
     }
 
     delete obj["collection"];
 	delete obj["id"];
     delete obj['changed'];
-
 
 	for (var newLink in obj){
         var type = ab.util.parseTypeFromKey(newLink);
@@ -422,24 +511,41 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
             }
         }
 
-        if(isNew){
-            //TODO: firing changed objs
-        }
-
-		this.addLink(prop,val,true,order);
+        if(!isNew || typeof this.links[prop] == 'undefined')
+            fireNewValue = true;
+        	this.addLink(prop,val,true,order);
 	}
 
     if(isNew){
-
         for (var prop in this.links)
             if (! newProps[prop])
+                fireNewValue = true;
                 this.removeLink(prop,true);
 
-        //TODO: fire as new
+        if(fireNewValue){
+            ab.intern.fire(ab.events.intern.value,this.id);
+        }
+    } else {
+        ab.intern.fire(ab.events.intern.value_arrived,this.id);
     }
-
-    //TODO: fire value
 }
+
+AppbaseObj.prototype.generateSnap = function(){
+
+}
+
+var AppbaseSnapObj = function(obj){
+    this.index;
+    var value;
+    var path;
+    var name;
+    var ref;
+    var numObj;
+
+
+}
+
+
 
 AppbaseObj.prototype.generateSelfObj = function(){
 	var obj = {id:this.id};
@@ -455,78 +561,56 @@ AppbaseObj.prototype.generateSelfObj = function(){
 	return obj;
 }
 
-AppbaseObj.prototype.addLink = function(linkName,val,noFireOnVal,order){
-	noFireOnVal = false || noFireOnVal;
+AppbaseObj.prototype.addLink = function(linkName,val,fromInit,order){
+	fromInit = false || fromInit;
 
     this.links[linkName] = val;
+    if (typeof val == typeof new Object())
+        ab.store.obj.parent.addParent(val.uuid,this,linkName);
 
     //handle ordering
     var oldIndex = this.linksOrdered.indexOf(val);
+    if(oldIndex){ //object already exits
+        if(typeof order != 'undefined'){
 
-    if(typeof order != 'undefined'){
+            if(oldIndex) {
+                this.linksOrdered.splice(oldIndex,1);
+            }
 
-        if(oldIndex) {
-            this.linksOrdered.splice(oldIndex,1);
+            if (order < 0){
+                order = this.linksOrdered.length + order + 1;
+            }
+
+            if(typeof this.linksOrdered[order] == 'undefined')
+                this.linksOrdered[order] = linkName;
+            else
+                this.linksOrdered.splice(order,0,linkName);
+
         }
 
-        if (order < 0){
-            order = this.linksOrdered.length + order + 1;
+        if(!fromInit || this.changed[linkName]){ //changed locally or change is specified from server
+            ab.events.fire(ab.events.types.intern.object_changed,this.id);
+            delete this.changed[linkName];
         }
 
-        if(typeof this.linksOrdered[order] == 'undefined')
-            this.linksOrdered[order] = linkName;
-        else
-            this.linksOrdered.splice(order,0,linkName);
-
-	}
-	else if( oldIndex ){
-        //property exits, order not defined. do nothing.
-	} else {
+    } else {
         this.linksOrdered.unshift(linkName); //new property, order not defined - push to top
+        ab.events.fire(ab.events.types.intern.object_added,this.id);
     }
 
-    if (typeof val == typeof new Object())
-	    ab.store.obj.parent.addParent(val.uuid,this,linkName);
 
-    this.fire('object_added',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid));
-
-	if(!noFireOnVal)
-		this.fire('value',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+	if(!fromInit)
+        ab.events.fire(ab.events.types.intern.value,this.id);
 
 }
 
 AppbaseObj.prototype.fire = function(event,obj){
 
-	for (var refId in this.listeners[event]){
-		if(this.listeners[event][refId])
-			setTimeout(this.listeners[event][refId].bind(undefined,obj),0);
-	}
-
-	switch(event){
-		case 'value':
-			for (var id in ab.store.obj.parent.getParents(this.id)){
-				ab.store.obj.parent.getParents(this.id)[id].parent.fire('object_changed',Appbase.ref(this.collection+':'+this.id))
-			}
-		    break;
-
-		case  'object_changed':
-		case  'object_added':
-		case  'object_removed':
-    		break;
-
-		default:
-			break;
-	}
-}
-
-AppbaseObj.prototype.addListener = function(event,id,func){
-	this.listeners[event][id] = func;
 }
 
 
-
-AppbaseObj.prototype.removeLink = function(linkName,noFireOnVal){
-    noFireOnVal = false || noFireOnVal;
+AppbaseObj.prototype.removeLink = function(linkName,fromInit){
+    fromInit = false || fromInit;
 
     var val = this.links[linkName];
     if (typeof val == 'undefined')
@@ -540,20 +624,20 @@ AppbaseObj.prototype.removeLink = function(linkName,noFireOnVal){
     if(typeof val == typeof new Object())
 	    ab.store.obj.parent.removeParent(val.uuid,this);
 
-	this.fire('object_removed',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+    ab.events.fire(ab.events.types.intern.object_removed,this.id);
 
-    if(!noFireOnVal)
-        this.fire('value',Appbase.ref(ab.util.parseCollectionFromPath(linkName)+":"+uuid))
+    if(!fromInit)
+        ab.events.fire(ab.events.types.intern.value,this.id);
 }
 
 var AppbaseRef = function(path,dontFetch){
-	this.path = path;
+	this._path = path;
 	this.refId = ab.util.uuid(); //this id is used to make this ref a unique identity, which will be used to add/remove listeners
 
 	var isAPath = false;
-	if (this.path == ab.util.front(this.path)){
+	if (this.path() == ab.util.front(this.path())){
 		var id = ab.util.uuid();
-		this.path = this.path+"/"+id;
+		this._path = this.path()+"/"+id;
 	}
 
 	if(ab.util.cutFront(ab.util.cutFront(path)).indexOf('/')>=0){
@@ -575,7 +659,7 @@ var AppbaseRef = function(path,dontFetch){
 					throw new Error(path+": Path doesn't exist");
 				}
 			};
-		}(this.path,isAPath));
+		}(this.path(),isAPath));
 	}
 
 }
@@ -593,25 +677,25 @@ AppbaseRef.prototype.uuidPro = function(){
 }
 
 AppbaseRef.prototype.uuid = function(callback) {
-	ab.util.pathToUuid(this.path,callback);
+	ab.util.pathToUuid(this.path(),callback);
 }
 
 AppbaseRef.prototype.linkRef = function (path){
 	if(path == parseCollectionFromPath)
 		isACollection = true;
-	return new AppbaseRef(this.path+'/'+path)
+	return new AppbaseRef(this.path()+'/'+path)
 }
 
-AppbaseRef.prototype.getPath = function(){
-	return this.path;
+AppbaseRef.prototype.path = function(){
+	return this._path;
 }
 
 AppbaseRef.prototype.getKey = function(){
-	return ab.util.parseKeyFromPath(this.path);
+	return ab.util.parseKeyFromPath(this.path());
 }
 
 AppbaseRef.prototype.getCollection = function(){
-	return ab.util.parseCollectionFromPath(this.path);
+	return ab.util.parseCollectionFromPath(this.path());
 }
 
 AppbaseRef.prototype.set= function(prop,val){
@@ -664,42 +748,44 @@ AppbaseRef.prototype.get= function(prop,cb){
 }
 
 AppbaseRef.prototype.on= function(event,fun,levels){
-	var listenObj = [event,this.refId,fun,levels];
+    ab.events.initForPath(this.path());
+    ab.store.listeners[event][this.refId] = fun;
 
-	/*
-	this.uuidPro().then(function (uuid){
-		return ab.store.obj.get.nowPro(uuid,false);
-	}).then(function(obj){
-		obj.listeners[listenObj[0]][listenObj[1]] = listenObj[2];;
-	}).catch(console.log)
+    //bring the object
+    this.uuidPro()
+    .then(function(uuid){
+        return ab.util.get.nowPro(uuid,false);
+    })
 
-	*/
+    /*
+    var listenObj = [event,this.refId,fun]
 	var thisRef = this;
 	this.uuid(function(collection, listenObj){
 		return function(err,uuid){
+
 			if (listenObj[0] =='object_changed' || listenObj[0] == 'subtree_changed'){
 				ab.util.getTreePro(typeof listenObj[3] == 'undefined'? 2: listenObj[3],thisRef);
 			}
 
+
 			ab.store.obj.get.now(uuid,false,function(listenObj){
 				return function(err,obj){
-					obj.listeners[listenObj[0]][listenObj[1]] = listenObj[2];;
+					obj.listeners[listenObj[0]][listenObj[1]] = listenObj[2];
 				};
 			}(listenObj));
 
 		};
 	}(this.collection,listenObj));
+    */
 }
 
 AppbaseRef.prototype.off= function(event){
+    ab.events.initForPath(this.path());
+    delete ab.store.listeners[event][this.refId];
+
+    /*
 	var listenObj = [event,this.refId]
-	/*
-	this.uuidPro().then(function (uuid){
-		return ab.store.obj.get.nowPro(uuid,false);
-	}).then(function(obj){
-		delete  obj.listeners[listenObj[0]][listenObj[1]];
-	}).catch(console.log)
-	*/
+
 
 	this.uuid(function(collection, listenObj){
 		return function(err,uuid){
@@ -710,6 +796,7 @@ AppbaseRef.prototype.off= function(event){
 			}(listenObj));
 		};
 	}(this.collection,listenObj));
+	*/
 
 }
 
