@@ -73,7 +73,7 @@ ab.events.initForPath = function(path){
     }
 }
 
-ab.events.fireIntern = function(intEvent,uuid){
+ab.events.fireIntern = function(intEvent,uuid,data){
     switch(intEvent){
         case ab.events.intern.value:
             ab.events.fireExtern(ab.events.extern.value,uuid);
@@ -104,6 +104,8 @@ ab.events.fireIntern = function(intEvent,uuid){
 }
 
 ab.events.fireExtern = function(extEvent,uuid){
+    var snapObj = {};
+    //TODO: snap obj
 
     var paths = ab.util.uuidToPaths(uuid);
     for(var i=0; i<paths.length;i++) {
@@ -111,11 +113,9 @@ ab.events.fireExtern = function(extEvent,uuid){
 
         for (var refId in ab.store.listeners[path][extEvent]){
             if(ab.store.listeners[path][extEvent][refId])
-                setTimeout(ab.store.listeners[path][extEvent][refId].bind(undefined,obj),0);
+                setTimeout(ab.store.listeners[path][extEvent][refId].bind(undefined,snapObj),0);
         }
     }
-
-
 }
 
 ab.store.obj.parent.addParent = function(childUuid,parentObj,k){
@@ -586,13 +586,14 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
         }
 
         if(!isRemote || this.changed[prop]){ //changed locally or change is specified from server
-            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id);
+            //TODO: local changes need to be registered in this.changed.
+            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,{index:order});
             delete this.changed[prop];
         }
 
     } else {
         this.linksOrdered.unshift(prop); //new property, order not defined - push to top
-        ab.events.fireIntern(ab.events.types.intern.object_added,this.id);
+        ab.events.fireIntern(ab.events.types.intern.object_added,this.id,{index:0});
     }
 
 	if(!isRemote)
