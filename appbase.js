@@ -106,15 +106,14 @@ ab.events.fireIntern = function(intEvent,uuid,data){
 
 
 var AppbaseSnapObj = function(data){
-
-    data.ref = Appbase.ref(data.path);
+    //TODO: data.ref = Appbase.ref(data.path);
 
     return {
         prevVal:function(){
-            return data.preVal;
+            return data.prevVal;
         },
         val: function(){
-            return data.value;
+            return data.val;
         },
         path: function(){
             return data.path;
@@ -142,10 +141,9 @@ var AppbaseSnapObj = function(data){
 
 
 ab.events.fireExtern = function(extEvent,uuid,data){
-
     var paths = ab.util.uuidToPaths(uuid);
-    for(var i=0; i<paths.length;i++) {
-        var path = paths[0];
+    for(var i=0; i < paths.length;i++) {
+        var path = paths[i];
 
         //Snapshot obj, filling data
         if(extEvent == ab.events.types.extern.value){
@@ -160,12 +158,16 @@ ab.events.fireExtern = function(extEvent,uuid,data){
         }
 
         var snapObj = AppbaseSnapObj(data);
+        snap = snapObj;
 
+        ab.events.initForPath(path);
         for (var refId in ab.store.listeners[path][extEvent]){
             if(ab.store.listeners[path][extEvent][refId])
                 setTimeout(ab.store.listeners[path][extEvent][refId].bind(undefined,snapObj),0);
         }
     }
+
+    console.log('fired',extEvent);
 }
 
 ab.store.obj.parent.addParent = function(childUuid,parentObj,k){
@@ -343,7 +345,7 @@ ab.socket = io.connect(ab.net.server);
 //root immortalspectre
 
 ab.net.listenToUuid = function(uuid, done) {
-	//console.log("listening:"+uuid);
+
    ab.socket.emit('get', uuid);
    ab.socket.on(uuid, function(obj) {
        if(obj === "false") {
@@ -352,22 +354,18 @@ ab.net.listenToUuid = function(uuid, done) {
 			done(false, false);
        }
        else {
-			//console.log('arrived')
-			//console.log(obj);
 			done(false, obj);
        }
    });
 }
 
 ab.net.putByUuid = function(obj, done) {
-	//console.log('putting')
-	//console.log(obj);
 	ab.socket.emit('put', obj);
 	done(false);
 }
 
 ab.util.getTreePro = function (levels,selfRef){
-	//console.log(levels,baseUuid)
+
 	return new Promise(
 		function(resolve,reject){
 
@@ -534,7 +532,7 @@ var AppbaseObj = function (obj){
 	this.setSelfObj(obj);
 }
 
-AppabaseObj.prototype.export = function(){
+AppbaseObj.prototype.export = function(){
     var obj = {};
     for(var prop in this.links){
         if(typeof this.links[prop] != typeof new Object()){
@@ -559,7 +557,7 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
         this.id = obj.id;
         this.collection = obj.collection;
     } else {
-        this.changed = JSON.parse(obj['changed']);
+        this.changed = typeof obj['changed']== 'undefined'? {}:JSON.parse(obj['changed']);
         var newProps = {};
         var oldVal = this.export();
     }
@@ -624,7 +622,8 @@ AppbaseObj.prototype.generateSelfObj = function(){
 }
 
 AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
-	isRemote = false || isRemote;
+	if(! isRemote)
+        isRemote = false;
 
     var oldSelfVal = this.export();
 
@@ -667,8 +666,18 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
         if(!isRemote || this.changed[prop]){ //changed locally or change is specified from server
             //TODO: local changes need to be registered in this.changed.
-            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,{id:(typeof val == typeof new Object()?val.uuid:null),prevVal:oldObjVal,index:order,prevIndex:oldIndex,name:prop});
-            delete this.changed[prop];
+
+            var objUuid = (typeof val == typeof new Object()?val.uuid:null);
+            var data = {
+                id:objUuid,
+                prevVal:oldObjVal,
+                index:order,
+                prevIndex:oldIndex,
+                name:prop
+            };
+
+            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,data);
+            //delete this.changed[prop];
         }
 
     } else {
@@ -884,38 +893,28 @@ AppbaseRef.prototype.off = function(event){
 
 
 
-AppbaseRef.prototype.insert = function(prop,abRef){
-	if(typeof prop == 'object'){
-		var abRef = prop;
-		prop = ab.util.parseKeyFromPath(abRef.getPath());
-	}
-
-	var linkPath = abRef.getPath();
-	var linkCollection = ab.util.parseCollectionFromPath(linkPath);
-	//var prop = linkCollection+':'+prop;
-
-	Promise.all([this.getPath(),linkPath].map(function (path){return ab.util.pathToUuidPro(path)}))
-	.then(function (uuids){
-		return Promise.all(uuids.map(function (uuid) { return ab.store.obj.get.nowPro(uuid,false)}))
-	}).then(function(objs){
-		//objs[1].addParent(objs[0],ab.util.parseKeyFromPath(prop));
-		objs[0].insert(prop,objs[1].id);
-		ab.store.obj.put.nowId(objs[0].id);
-	});
-
+AppbaseRef.prototype.insert = function(prop,val){
+    ab.util.pathToUuidPro(this.path())
+    .then(function(uuid){
+        return ab.store.obj.get.nowPro(uuid,false);
+    })
+    .then(function(obj){
+        obj.insert(prop,val);
+    });
 }
 
-AppbaseRef.prototype.remove= function(abRef){
-	console.log('remove:'+abRef);
-	Promise.all([this.getPath(),abRef.getPath()].map(function (path){return ab.util.pathToUuidPro(path)}))
-	.then(function (uuids){
-		return Promise.all(uuids.map(function (uuid) { return ab.store.obj.get.nowPro(uuid,false)}))
-	}).then(function(objs){
-		objs[0].removeUuid(objs[1].id);
-		ab.store.obj.put.nowId(objs[0].id);
-	});
-
+AppbaseRef.prototype.remove= function(prop){
+    ab.util.pathToUuidPro(this.path())
+        .then(function(uuid){
+            return ab.store.obj.get.nowPro(uuid,false);
+        })
+        .then(function(obj){
+            obj.remove(prop);
+        });
 }
 
-ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
+ab1 = Appbase.new('albela/sajan');
+ab1.insert('lol','pepe');
+
+//ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
 
