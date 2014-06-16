@@ -67,35 +67,36 @@ ab.events.initForPath = function(path){
     if (typeof ab.store.listeners[path] == 'undefined'){
         ab.store.listeners[path] = {};
 
-        for(var event in ab.events.extern){
-            ab.store.listeners[path][ab.events.extern[event]] = {};
+        for(var event in ab.events.types.extern){
+            ab.store.listeners[path][ab.events.types.extern[event]] = {};
         }
     }
 }
 
 ab.events.fireIntern = function(intEvent,uuid,data){
     switch(intEvent){
-        case ab.events.intern.value:
-            ab.events.fireExtern(ab.events.extern.value,uuid);
+        case ab.events.types.intern.value:
+            ab.events.fireExtern(ab.events.types.extern.value,uuid,data);
             for (var id in ab.store.obj.parent.getParents(uuid)){
-                ab.events.intern.fire(ab.events.intern.object_changed,id);
+                data.name = ab.store.obj.parent.getParents(uuid)[id].forKey;
+                ab.events.fireIntern(ab.events.types.intern.object_changed,id,data); //TODO: Index change?
             }
             break;
 
-        case ab.events.intern.value_arrived:
-            ab.events.fireExtern(ab.events.extern.value,uuid);
+        case ab.events.types.intern.value_arrived:
+            ab.events.fireExtern(ab.events.types.extern.value,uuid,data);
             break;
 
-        case ab.events.intern.object_changed:
-            ab.events.fireExtern(ab.events.extern.object_changed,uuid);
+        case ab.events.types.intern.object_changed:
+            ab.events.fireExtern(ab.events.types.extern.object_changed,uuid,data);
             break;
 
-        case ab.events.intern.object_added:
-            ab.events.fireExtern(ab.events.extern.object_added,uuid);
+        case ab.events.types.intern.object_added:
+            ab.events.fireExtern(ab.events.types.extern.object_added,uuid,data);
             break;
 
-        case ab.events.intern.object_removed:
-            ab.events.fireExtern(ab.events.extern.object_removed,uuid);
+        case ab.events.types.intern.object_removed:
+            ab.events.fireExtern(ab.events.types.extern.object_removed,uuid,data);
             break;
 
         default:
@@ -103,13 +104,62 @@ ab.events.fireIntern = function(intEvent,uuid,data){
     }
 }
 
-ab.events.fireExtern = function(extEvent,uuid){
-    var snapObj = {};
-    //TODO: snap obj
+
+var AppbaseSnapObj = function(data){
+
+    data.ref = Appbase.ref(data.path);
+
+    return {
+        prevVal:function(){
+            return data.preVal;
+        },
+        val: function(){
+            return data.value;
+        },
+        path: function(){
+            return data.path;
+        },
+        name: function(){
+            return data.name;
+        },
+        ref: function(){
+            return data.ref;
+        },
+        index: function(){
+            return data.index;
+        },
+        prevIndex: function(){
+            return data.prevIndex;
+        },
+        exportVal: function(){
+            //TODO:
+        }
+
+
+    }
+
+}
+
+
+ab.events.fireExtern = function(extEvent,uuid,data){
 
     var paths = ab.util.uuidToPaths(uuid);
     for(var i=0; i<paths.length;i++) {
         var path = paths[0];
+
+        //Snapshot obj, filling data
+        if(extEvent == ab.events.types.extern.value){
+            data.path = path;
+            data.name = ab.util.back(path);
+            //TODO: index
+
+        } else { //object_* event
+            data.path = path+'/'+data.name;
+            //TODO: index, if doesn't exist - internal fire
+            //TODO: don't modify data object
+        }
+
+        var snapObj = AppbaseSnapObj(data);
 
         for (var refId in ab.store.listeners[path][extEvent]){
             if(ab.store.listeners[path][extEvent][refId])
@@ -178,6 +228,14 @@ ab.util.front = function(path){
 
 ab.util.cutFront = function(path){
     return path.indexOf('/') == -1? '': path.slice(path.indexOf('/')+1);
+}
+
+ab.util.back = function(path){
+    return path.lastIndexOf('/') == -1? path: path.slice(path.lastIndexOf('/')+1);
+}
+
+ab.util.cutBack = function(path){
+    return path.lastIndexOf('/') == -1? '': path.slice(0,path.lastIndexOf('/'));
 }
 
 ab.auth.login = function (uid,pwd,callback){
@@ -476,6 +534,23 @@ var AppbaseObj = function (obj){
 	this.setSelfObj(obj);
 }
 
+AppabaseObj.prototype.export = function(){
+    var obj = {};
+    for(var prop in this.links){
+        if(typeof this.links[prop] != typeof new Object()){
+            obj[prop] = this.links[prop];
+        }
+    }
+    return obj;
+}
+
+ab.util.uuidToValuePro = function(uuid){
+    return ab.store.obj.get.nowPro(uuid,false)
+        .then(function(obj){
+            return Promise.resolve(obj.export());
+        });
+}
+
 AppbaseObj.prototype.setSelfObj = function(obj,isNew){
     isNew = false || isNew;
     var fireNewValue = false;
@@ -486,6 +561,7 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
     } else {
         this.changed = JSON.parse(obj['changed']);
         var newProps = {};
+        var oldVal = this.export();
     }
 
     delete obj["collection"];
@@ -520,25 +596,14 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
                 this.remove(prop,true);
 
         if(fireNewValue){
-            ab.events.fireIntern(ab.events.intern.value,this.id);
+            ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,val:this.export(),prevVal:oldVal});
         }
     } else {
-        ab.events.fireIntern(ab.events.intern.value_arrived,this.id);
+        ab.events.fireIntern(ab.events.types.intern.value_arrived,this.id,{id:this.id,val:this.export(),prevVal:null});
     }
 }
 
 AppbaseObj.prototype.generateSnap = function(){
-
-}
-
-var AppbaseSnapObj = function(obj){
-    this.index;
-    var value;
-    var path;
-    var name;
-    var ref;
-    var numObj;
-
 
 }
 
@@ -561,6 +626,20 @@ AppbaseObj.prototype.generateSelfObj = function(){
 AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 	isRemote = false || isRemote;
 
+    var oldSelfVal = this.export();
+
+    var oldObjVal = this.links[prop];
+
+    if (typeof oldObjVal == 'undefined' )
+        oldObjVal = null;
+    else if(typeof oldObjVal == typeof new Object()){
+
+        if(typeof ab.store.obj.storage[oldObjVal.uuid] != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
+            oldObjVal = ab.store.obj.storage[oldObjVal.uuid].export();
+        } else {
+            oldObjVal = null;
+        }
+    }
     this.links[prop] = val;
     if (typeof val == typeof new Object())
         ab.store.obj.parent.addParent(val.uuid,this,prop);
@@ -578,6 +657,7 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
                 order = this.linksOrdered.length + order + 1;
             }
 
+
             if(typeof this.linksOrdered[order] == 'undefined')
                 this.linksOrdered[order] = prop;
             else
@@ -587,27 +667,36 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
         if(!isRemote || this.changed[prop]){ //changed locally or change is specified from server
             //TODO: local changes need to be registered in this.changed.
-            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,{index:order});
+            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,{id:(typeof val == typeof new Object()?val.uuid:null),prevVal:oldObjVal,index:order,prevIndex:oldIndex,name:prop});
             delete this.changed[prop];
         }
 
     } else {
         this.linksOrdered.unshift(prop); //new property, order not defined - push to top
-        ab.events.fireIntern(ab.events.types.intern.object_added,this.id,{index:0});
+        ab.events.fireIntern(ab.events.types.intern.object_added,this.id,{id:(typeof val == typeof new Object()?val.uuid:null),prevVal:null,index:0,prevIndex:null,name:prop});
     }
 
 	if(!isRemote)
-        ab.events.fireIntern(ab.events.types.intern.value,this.id);
+        ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,prevVal:oldSelfVal,val:this.export()});
 
 }
 
 
 AppbaseObj.prototype.remove = function(prop,isRemote){
     isRemote = false || isRemote;
-
+    var selfVal = this.export();
     var val = this.links[prop];
-    if (typeof val == 'undefined')
+    if (typeof val == 'undefined'){
+        console.log('removing undefined prop');
         return;
+    } else if(typeof val == typeof new Object()){
+        var objUuid = val.uuid;
+        if(typeof ab.store.obj.storage[val.uuid] != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
+            val = ab.store.obj.storage[val.uuid].export();
+        } else {
+            val = null;
+        }
+    }
 
 	delete this.links[prop];
 
@@ -615,12 +704,12 @@ AppbaseObj.prototype.remove = function(prop,isRemote){
 	this.linksOrdered.splice(order,1);
 
     if(typeof val == typeof new Object())
-	    ab.store.obj.parent.removeParent(val.uuid,this);
+	    ab.store.obj.parent.removeParent(objUuid,this);
 
-    ab.events.fireIntern(ab.events.types.intern.object_removed,this.id);
+    ab.events.fireIntern(ab.events.types.intern.object_removed,this.id,{id:(typeof val == typeof new Object()?objUuid:null),val:null,index:null,prevVal:val,prevIndex:order});
 
     if(!isRemote)
-        ab.events.fireIntern(ab.events.types.intern.value,this.id);
+        ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,val:this.export(),prevVal:selfVal});
 }
 
 var AppbaseRef = function(path,dontFetch){
