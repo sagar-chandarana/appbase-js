@@ -550,7 +550,6 @@ ab.util.uuidToValuePro = function(uuid){
 }
 
 AppbaseObj.prototype.setSelfObj = function(obj,isNew){
-    isNew = false || isNew;
     var fireNewValue = false;
 
     if(!isNew) {
@@ -622,13 +621,8 @@ AppbaseObj.prototype.generateSelfObj = function(){
 }
 
 AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
-	if(! isRemote)
-        isRemote = false;
-
     var oldSelfVal = this.export();
-
     var oldObjVal = this.links[prop];
-
     if (typeof oldObjVal == 'undefined' )
         oldObjVal = null;
     else if(typeof oldObjVal == typeof new Object()){
@@ -645,10 +639,11 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
     //handle ordering
     var oldIndex = this.linksOrdered.indexOf(prop);
-    if(oldIndex){ //object already exits
+    console.log(oldIndex);
+    if(oldIndex >= 0){ //object already exits
         if(typeof order != 'undefined'){
 
-            if(oldIndex) {
+            if(oldIndex < 0) {
                 this.linksOrdered.splice(oldIndex,1);
             }
 
@@ -692,7 +687,6 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
 
 AppbaseObj.prototype.remove = function(prop,isRemote){
-    isRemote = false || isRemote;
     var selfVal = this.export();
     var val = this.links[prop];
     if (typeof val == 'undefined'){
