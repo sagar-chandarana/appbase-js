@@ -80,7 +80,7 @@ ab.events.fireIntern = function(eventData,data){
             for (var id in ab.store.obj.parent.getParents(eventData.onId)){
                 var newData = ab.util.clone(data);
                 newData.name = ab.store.obj.parent.getParents(eventData.onId)[id].forKey;
-                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:id},newData); //TODO: Index change?
+                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:id},newData); //TODO: data missing?
             }
             break;
 
@@ -152,7 +152,8 @@ var AppbaseSnapObj = function(path, eventData,objData){
     }
 
 
-    //TODO: data.ref = Appbase.ref(data.path);
+    data.ref = Appbase.ref(data.path,true);
+
     return Promise.all(promises).then(function(){
         console.log(data);
         return Promise.resolve({
@@ -679,7 +680,6 @@ AppbaseObj.prototype.generateSelfObj = function(){
 }
 
 AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
-    //TODO: adding a reference
 
     var oldSelfVal = this.export();
     var oldObjVal = this.links[prop];
@@ -783,6 +783,7 @@ AppbaseObj.prototype.remove = function(prop,isRemote){
 }
 
 var AppbaseRef = function(path,dontFetch){
+    //TODO: reference to a property
 	this._path = path;
 	this.refId = ab.util.uuid(); //this id is used to make this ref a unique identity, which will be used to add/remove listeners
 
@@ -933,12 +934,19 @@ AppbaseRef.prototype.off = function(event){
 }
 
 AppbaseRef.prototype.insert = function(prop,val){
-    ab.util.pathToUuidPro(this.path())
-    .then(function(uuid){
-        return ab.store.obj.get.nowPro(uuid,false);
-    })
-    .then(function(obj){
-        obj.insert(prop,val);
+    var promises = [];
+    promises.push(this.uuidPro().then(function(uuid){return ab.store.obj.get.nowPro(uuid,false)}));
+
+    if(typeof val == typeof new Object()){ //TODO: check for AppbaseReference
+        promises.push(val.uuidPro());
+    }
+
+    Promise.all(promises)
+    .then(function(arr){
+        if(arr.length == 2)
+            val = { uuid: arr[1] } ;
+
+        arr[0].insert(prop,val);
     });
 }
 
@@ -953,6 +961,7 @@ AppbaseRef.prototype.remove= function(prop){
 }
 
 ab1 = Appbase.new('albela/sajan');
+ab2 = Appbase.new('lolo/lll');
 
 ab1.on('object_added',function(snap){
     console.log(snap.name(),snap.val(),snap.index());
@@ -962,7 +971,8 @@ ab1.on('object_changed',function(snap){
     console.log(snap.name(),snap.val(),snap.index());
 });
 
-ab1.insert('lol','pepo');
+ab2.insert('age',5);
+//ab1.insert('hello',ab2);
 
 //ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
 
