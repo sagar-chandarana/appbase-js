@@ -73,30 +73,35 @@ ab.events.initForPath = function(path){
     }
 }
 
-ab.events.fireIntern = function(intEvent,uuid,data){
-    switch(intEvent){
+ab.events.fireIntern = function(eventData,data){
+    switch(eventData.event){
         case ab.events.types.intern.value:
-            ab.events.fireExtern(ab.events.types.extern.value,uuid,data);
-            for (var id in ab.store.obj.parent.getParents(uuid)){
-                data.name = ab.store.obj.parent.getParents(uuid)[id].forKey;
-                ab.events.fireIntern(ab.events.types.intern.object_changed,id,data); //TODO: Index change?
+            ab.events.fireExtern(eventData,data);
+            for (var id in ab.store.obj.parent.getParents(eventData.onId)){
+                var newData = ab.util.clone(data);
+                newData.name = ab.store.obj.parent.getParents(eventData.onId)[id].forKey;
+                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:id},newData); //TODO: Index change?
             }
             break;
 
         case ab.events.types.intern.value_arrived:
-            ab.events.fireExtern(ab.events.types.extern.value,uuid,data);
+            eventData.event = ab.events.types.extern.value;
+            ab.events.fireExtern(eventData,data);
             break;
 
         case ab.events.types.intern.object_changed:
-            ab.events.fireExtern(ab.events.types.extern.object_changed,uuid,data);
+            eventData.event = ab.events.types.extern.object_changed.
+            ab.events.fireExtern(eventData,data);
             break;
 
         case ab.events.types.intern.object_added:
-            ab.events.fireExtern(ab.events.types.extern.object_added,uuid,data);
+            eventData.event = ab.events.types.extern.object_added;
+            ab.events.fireExtern(eventData,data);
             break;
 
         case ab.events.types.intern.object_removed:
-            ab.events.fireExtern(ab.events.types.extern.object_removed,uuid,data);
+            eventData.event = ab.events.types.extern.object_removed;
+            ab.events.fireExtern(eventData,data);
             break;
 
         default:
@@ -105,7 +110,20 @@ ab.events.fireIntern = function(intEvent,uuid,data){
 }
 
 
-var AppbaseSnapObj = function(data){
+var AppbaseSnapObj = function(path, eventData,objData){
+    var data = ab.util.clone(objData); //data is immutable now.
+
+    //filling data
+    if(eventData.event == ab.events.types.extern.value){
+        data.path = path;
+        data.name = ab.util.back(path);
+        //TODO: index
+
+    } else { //object_* event
+        data.path = path+'/'+data.name;
+        //TODO: index, if doesn't exist - internal fire
+        //TODO: don't modify data object
+    }
     //TODO: data.ref = Appbase.ref(data.path);
 
     return {
@@ -139,35 +157,39 @@ var AppbaseSnapObj = function(data){
 
 }
 
+ab.events.fireExtern = function(eventData,data){
+    if(eventData.paths)
+        var paths = eventData.paths;
+    else
+        var paths = ab.util.uuidToPaths(eventData.onId);
 
-ab.events.fireExtern = function(extEvent,uuid,data){
-    var paths = ab.util.uuidToPaths(uuid);
     for(var i=0; i < paths.length;i++) {
-        var path = paths[i];
+        
+        var fireClosure = function(path) {
+            var call = function(callback){
+                var snapObj = AppbaseSnapObj(path,eventData,data);
+                setTimeout(callback.bind(undefined,snapObj),0);
+            }
 
-        //Snapshot obj, filling data
-        if(extEvent == ab.events.types.extern.value){
-            data.path = path;
-            data.name = ab.util.back(path);
-            //TODO: index
+            ab.events.initForPath(path);
 
-        } else { //object_* event
-            data.path = path+'/'+data.name;
-            //TODO: index, if doesn't exist - internal fire
-            //TODO: don't modify data object
+            if(eventData.callback){
+                call(eventData.callback);
+            }
+
+            else {
+                for (var refId in ab.store.listeners[path][eventData.event]){
+                    if(ab.store.listeners[path][eventData.event][refId])
+                        call(ab.store.listeners[path][eventData.event][refId]);
+                }
+            }
+
         }
 
-        var snapObj = AppbaseSnapObj(data);
-        snap = snapObj;
-
-        ab.events.initForPath(path);
-        for (var refId in ab.store.listeners[path][extEvent]){
-            if(ab.store.listeners[path][extEvent][refId])
-                setTimeout(ab.store.listeners[path][extEvent][refId].bind(undefined,snapObj),0);
-        }
+        fireClosure(paths[i]);
     }
 
-    console.log('fired',extEvent);
+    console.log('fired',eventData.event);
 }
 
 ab.store.obj.parent.addParent = function(childUuid,parentObj,k){
@@ -593,18 +615,12 @@ AppbaseObj.prototype.setSelfObj = function(obj,isNew){
                 this.remove(prop,true);
 
         if(fireNewValue){
-            ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,val:this.export(),prevVal:oldVal});
+            ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.id},{id:this.id,val:this.export(),prevVal:oldVal});
         }
     } else {
-        ab.events.fireIntern(ab.events.types.intern.value_arrived,this.id,{id:this.id,val:this.export(),prevVal:null});
+        //ab.events.fireIntern({event:ab.events.types.intern.value_arrived,onId:this.id},{id:this.id,val:this.export(),prevVal:null});
     }
 }
-
-AppbaseObj.prototype.generateSnap = function(){
-
-}
-
-
 
 AppbaseObj.prototype.generateSelfObj = function(){
 	var obj = {id:this.id};
@@ -639,7 +655,6 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
     //handle ordering
     var oldIndex = this.linksOrdered.indexOf(prop);
-    console.log(oldIndex);
     if(oldIndex >= 0){ //object already exits
         if(typeof order != 'undefined'){
 
@@ -671,17 +686,17 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
                 name:prop
             };
 
-            ab.events.fireIntern(ab.events.types.intern.object_changed,this.id,data);
+            ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:this.id},data);
             //delete this.changed[prop];
         }
 
     } else {
         this.linksOrdered.unshift(prop); //new property, order not defined - push to top
-        ab.events.fireIntern(ab.events.types.intern.object_added,this.id,{id:(typeof val == typeof new Object()?val.uuid:null),prevVal:null,index:0,prevIndex:null,name:prop});
+        ab.events.fireIntern({event:ab.events.types.intern.object_added,onId:this.id},{id:(typeof val == typeof new Object()?val.uuid:null),prevVal:null,index:0,prevIndex:null,name:prop});
     }
 
 	if(!isRemote)
-        ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,prevVal:oldSelfVal,val:this.export()});
+        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.id},{id:this.id,prevVal:oldSelfVal,val:this.export()});
 
 }
 
@@ -709,10 +724,10 @@ AppbaseObj.prototype.remove = function(prop,isRemote){
     if(typeof val == typeof new Object())
 	    ab.store.obj.parent.removeParent(objUuid,this);
 
-    ab.events.fireIntern(ab.events.types.intern.object_removed,this.id,{id:(typeof val == typeof new Object()?objUuid:null),val:null,index:null,prevVal:val,prevIndex:order});
+    ab.events.fireIntern({event:ab.events.types.intern.object_removed,onId:this.id},{id:(typeof val == typeof new Object()?objUuid:null),val:null,index:null,prevVal:val,prevIndex:order});
 
     if(!isRemote)
-        ab.events.fireIntern(ab.events.types.intern.value,this.id,{id:this.id,val:this.export(),prevVal:selfVal});
+        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.id},{id:this.id,val:this.export(),prevVal:selfVal});
 }
 
 var AppbaseRef = function(path,dontFetch){
@@ -758,7 +773,7 @@ Appbase.new = function(arg){
 }
 
 AppbaseRef.prototype.uuidPro = function(){
-	return ab.util.pathToUuidPro(this.getPath()).then(function(uuid){ return uuid; });
+	return ab.util.pathToUuidPro(this.path());
 }
 
 AppbaseRef.prototype.uuid = function(callback) {
@@ -833,14 +848,50 @@ AppbaseRef.prototype.get= function(prop,cb){
 }
 
 AppbaseRef.prototype.on = function(event,fun,levels){
-    ab.events.initForPath(this.path());
-    ab.store.listeners[event][this.refId] = fun;
+    if(! ab.events.types.extern[event] ){
+        throw new Error("Invalid event.");
+        return this;
+    }
 
+    ab.events.initForPath(this.path());
     //bring the object
+    var that = this;
+    var uid;
     this.uuidPro()
     .then(function(uuid){
-        return ab.util.get.nowPro(uuid,false);
+        uid = uuid;
+        return ab.store.obj.get.nowPro(uuid,false);
+    }).then(function(obj){
+            switch(event){
+                case ab.events.types.extern.value:
+                    var data = { val: obj.export(),
+                        prevVal: null,
+                        id: uid
+                    }
+                    var eventData = {
+                        event: event,
+                        onId: uid,
+                        callback:fun,
+                        paths: [that.path()]
+                    }
+                    ab.events.fireExtern(eventData,data);
+                    ab.store.listeners[that.path()][event][that.refId] = fun;
+                    break;
+                case ab.events.types.extern.object_added:
+                    break;
+                default:
+                    ab.store.listeners[that.path()][event][that.refId] = fun;
+                    break;
+            }
+    },function(error){
+        console.log(error);
     })
+
+
+
+
+
+
 
     /*
     var listenObj = [event,this.refId,fun]
@@ -866,7 +917,7 @@ AppbaseRef.prototype.on = function(event,fun,levels){
 
 AppbaseRef.prototype.off = function(event){
     ab.events.initForPath(this.path());
-    delete ab.store.listeners[event][this.refId];
+    delete ab.store.listeners[this.path()][event][this.refId];
 
     /*
 	var listenObj = [event,this.refId]
@@ -908,7 +959,11 @@ AppbaseRef.prototype.remove= function(prop){
 }
 
 ab1 = Appbase.new('albela/sajan');
-ab1.insert('lol','pepe');
+
+ab1.on('value',function(snap){
+    console.log(snap.val());
+})
+//ab1.insert('lol','pepe');
 
 //ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
 
