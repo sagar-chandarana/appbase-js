@@ -154,6 +154,7 @@ var AppbaseSnapObj = function(path, eventData,objData){
 
     //TODO: data.ref = Appbase.ref(data.path);
     return Promise.all(promises).then(function(){
+        console.log(data);
         return Promise.resolve({
             prevVal:function(){
                 return data.prevVal;
@@ -321,10 +322,10 @@ ab.store.obj.get.now = function(uuid,createNew,callback){
 				if(!err){
 					if(!obj)
 						if(createNew){
-							obj = {id:uuid,collection:createNew}
+							var obj = {id:uuid,collection:createNew}
 							isANewObj = true;
 						} else {
-							callback(err,false);
+							callback(err,null);
 							return;
 						}
 
@@ -666,7 +667,7 @@ AppbaseObj.prototype.generateSelfObj = function(){
     obj.changed = JSON.stringify(this.changed);
     this.changed = {};
 	obj.collection = this.collection;
-    //TODO: filter linksOrdered
+    this.linksOrdered = this.linksOrdered.filter(function(n){ return n != undefined })
 
     for (var i = 0;i< this.linksOrdered.length;i++){
         var prop = this.linksOrdered[i];
@@ -697,8 +698,6 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
         ab.store.obj.parent.addParent(val.uuid,this,prop);
 
     //handle ordering
-
-
     var oldIndex = this.linksOrdered.indexOf(prop);
     if(oldIndex >= 0){
         if(typeof order == 'undefined' ){
@@ -756,7 +755,7 @@ AppbaseObj.prototype.remove = function(prop,isRemote){
     var selfVal = this.export();
     var val = this.links[prop];
     if (typeof val == 'undefined'){
-        console.log('removing undefined prop');
+        console.log('removing undefined prop!');
         return;
     } else if(typeof val == typeof new Object()){
         var objUuid = val.uuid;
@@ -846,6 +845,7 @@ AppbaseRef.prototype.getTree = function (levels,cb){
 */
 
 AppbaseRef.prototype.on = function(event,fun,levels){
+    //TODO: options
     if(! ab.events.types.extern[event] ){
         throw new Error("Invalid event.");
         return this;
@@ -861,22 +861,57 @@ AppbaseRef.prototype.on = function(event,fun,levels){
         uid = uuid;
         return ab.store.obj.get.nowPro(uuid,false);
     }).then(function(obj){
+            var eventData = {
+                event: event,
+                onId: uid,
+                callback:fun,
+                paths: [that.path()]
+            }
+
             switch(event){
+
                 case ab.events.types.extern.value:
                     var data = { val: obj.export(),
                         prevVal: null,
-                        id: uid
+                        id: uid,
+                        prevIndex:null
                     }
-                    var eventData = {
-                        event: event,
-                        onId: uid,
-                        callback:fun,
-                        paths: [that.path()]
-                    }
+
                     ab.events.fireExtern(eventData,data);
                     ab.store.listeners[that.path()][event][that.refId] = fun;
                     break;
                 case ab.events.types.extern.object_added:
+                    var promises = [];
+                    for(var i=0;i<obj.linksOrdered;i++) {
+                        if(obj.linksOrdered != undefined){
+                            var val = obj.links[obj.linksOrdered[i]];
+                            if(typeof val == typeof new Object()){
+                                promises.push(ab.store.obj.get.nowPro(val.uuid));
+                            }
+                        }
+                    }
+
+                    Promise.all(promises).then(function(){
+                        for(var i=0;i<obj.linksOrdered.length;i++) {
+                            var val = obj.links[obj.linksOrdered[i]];
+                            var data = {
+                                prevVal: null,
+                                name: obj.linksOrdered[i],
+                                prevIndex:null,
+                                index:i
+                            }
+                            if(typeof val == typeof new Object()){
+                                data.id = val.uuid;
+                            } else {
+                                data.id = null,
+                                data.val = val
+                            }
+                            ab.events.fireExtern(eventData,data);
+                        }
+
+                        ab.store.listeners[that.path()][event][that.refId] = fun;
+                    })
+
                     break;
                 default:
                     ab.store.listeners[that.path()][event][that.refId] = fun;
@@ -919,8 +954,8 @@ AppbaseRef.prototype.remove= function(prop){
 
 ab1 = Appbase.new('albela/sajan');
 
-ab1.on('value',function(snap){
-    console.log(snap.val(),snap.index());
+ab1.on('object_added',function(snap){
+    console.log(snap.name(),snap.val(),snap.index());
 })
 
 ab1.on('object_changed',function(snap){
