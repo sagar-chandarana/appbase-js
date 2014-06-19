@@ -90,6 +90,7 @@ ab.events.fireIntern = function(eventData,data){
             break;
 
         case ab.events.types.intern.object_changed:
+            //TODO: fire up.value - recursive listening.
             eventData.event = ab.events.types.extern.object_changed;
             ab.events.fireExtern(eventData,data);
             break;
@@ -111,6 +112,7 @@ ab.events.fireIntern = function(eventData,data){
 
 
 var AppbaseSnapObj = function(path, eventData,objData){
+
     var data = ab.util.clone(objData);
 
     //filling data
@@ -125,11 +127,12 @@ var AppbaseSnapObj = function(path, eventData,objData){
     var promises = [];
 
     if(typeof data.val == 'undefined'){
-        promises.push(ab.store.get.nowPro(data.id)
+        promises.push(ab.store.obj.get.nowPro(data.id)
             .then(function(obj){
-                    data.val = obj.export();
-                    return Promise.resolve();
+                data.val = obj.export();
+                return Promise.resolve();
             },function(err){
+                console.log(err);
                 data.val = null;
                 return Promise.resolve();
             })
@@ -139,23 +142,22 @@ var AppbaseSnapObj = function(path, eventData,objData){
     if(typeof data.index == 'undefined'){
         promises.push(ab.util.pathToUuidPro(ab.util.cutBack(data.path))
             .then(function(uuid){
-                return ab.store.get.nowPro(uuid)
+                return ab.store.obj.get.nowPro(uuid,false);
             })
             .then(function(obj){
                 data.index = obj.linksOrdered.indexOf(data.name);
                 return Promise.resolve();
             },function(err){
+                console.log(err);
                 data.index = null;
                 return Promise.resolve();
             })
         );
     }
 
-
     data.ref = Appbase.ref(data.path,true);
 
     return Promise.all(promises).then(function(){
-        console.log(data);
         return Promise.resolve({
             prevVal:function(){
                 return data.prevVal;
@@ -196,12 +198,13 @@ ab.events.fireExtern = function(eventData,data){
         var paths = ab.util.uuidToPaths(eventData.onId);
 
     for(var i=0; i < paths.length;i++) {
-        
+        console.log('fired:'+ eventData.event+' on:'+eventData.onId+' prop:'+data.name+' id:'+data.id);
+
         var fireClosure = function(path) {
+
             var call = function(callback){
                 AppbaseSnapObj(path,eventData,data).then(function(snapObj){
                     setTimeout(callback.bind(undefined,snapObj),0);
-                    console.log('fired',eventData.event);
                 });
             }
 
@@ -307,6 +310,11 @@ ab.auth.login = function (uid,pwd,callback){
 
 
 ab.store.obj.get.now = function(uuid,createNew,callback){
+    if(typeof createNew == "function"){
+        var callback = createNew;
+        createNew = false;
+    }
+
 	if (typeof ab.store.obj.storage[uuid] == 'undefined'){
 
 		if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
@@ -606,13 +614,14 @@ AppbaseObj.prototype.export = function(){
 }
 
 ab.util.uuidToValuePro = function(uuid){
-    return ab.store.obj.get.nowPro(uuid,false)
+    return ab.store.obj.get.nowPro(uuid)
         .then(function(obj){
             return Promise.resolve(obj.export());
         });
 }
 
 AppbaseObj.prototype.setSelfObj = function(obj,isNew){
+    console.log('arrived',obj);
     var fireNewValue = false;
 
     if(!isNew) {
@@ -676,6 +685,7 @@ AppbaseObj.prototype.generateSelfObj = function(){
         obj[key] = this.links[prop];
     }
 
+    console.log('generated:',obj);
 	return obj;
 }
 
@@ -699,12 +709,17 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
     //handle ordering
     var oldIndex = this.linksOrdered.indexOf(prop);
+
+
+    console.log(this.links,prop,'old',oldIndex);
+
     if(oldIndex >= 0){
         if(typeof order == 'undefined' ){
             var order = oldIndex;
-        } else {
-            this.linksOrdered.splice(oldIndex,1);
         }
+
+        this.linksOrdered.splice(oldIndex,1);
+
     } else if(typeof order == 'undefined') {
         var order = 0;
     }
@@ -731,6 +746,7 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
             };
 
             ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:this.id},data);
+            console.log('changed')
 
             if(isRemote)
                 delete this.changed[prop];
@@ -831,19 +847,14 @@ AppbaseRef.prototype.uuidPro = function(){
 
 AppbaseRef.prototype.uuid = function(callback) {
 	ab.util.pathToUuid(this.path(),callback);
+
+    return this;
 }
 
 AppbaseRef.prototype.path = function(){
 	return this._path;
 }
 
-/*
-AppbaseRef.prototype.getTree = function (levels,cb){
-	ab.util.getTreePro(levels,this).then(function(tree){
-		cb(tree);
-	});
-}
-*/
 
 AppbaseRef.prototype.on = function(event,fun,levels){
     //TODO: options
@@ -860,7 +871,7 @@ AppbaseRef.prototype.on = function(event,fun,levels){
     this.uuidPro()
     .then(function(uuid){
         uid = uuid;
-        return ab.store.obj.get.nowPro(uuid,false);
+        return ab.store.obj.get.nowPro(uuid);
     }).then(function(obj){
             var eventData = {
                 event: event,
@@ -922,6 +933,8 @@ AppbaseRef.prototype.on = function(event,fun,levels){
         console.log(error);
     })
 
+    return this;
+
 }
 
 AppbaseRef.prototype.off = function(event){
@@ -931,11 +944,13 @@ AppbaseRef.prototype.off = function(event){
     else
         for(var event in ab.store.listeners[this.path()])
             delete ab.store.listeners[this.path()][event][this.refId];
+
+    return this;
 }
 
 AppbaseRef.prototype.insert = function(prop,val){
     var promises = [];
-    promises.push(this.uuidPro().then(function(uuid){return ab.store.obj.get.nowPro(uuid,false)}));
+    promises.push(this.uuidPro().then(function(uuid){return ab.store.obj.get.nowPro(uuid)}));
 
     if(typeof val == typeof new Object()){ //TODO: check for AppbaseReference
         promises.push(val.uuidPro());
@@ -948,31 +963,25 @@ AppbaseRef.prototype.insert = function(prop,val){
 
         arr[0].insert(prop,val);
     });
+
+    return this;
 }
 
 AppbaseRef.prototype.remove= function(prop){
     ab.util.pathToUuidPro(this.path())
         .then(function(uuid){
-            return ab.store.obj.get.nowPro(uuid,false);
+            return ab.store.obj.get.nowPro(uuid);
         })
         .then(function(obj){
             obj.remove(prop);
         });
+
+    return this;
 }
 
-ab1 = Appbase.new('albela/sajan');
-ab2 = Appbase.new('lolo/lll');
+ab1 = Appbase.new('albela/sajan4');
+//ab2 = Appbase.new('bella/vampire');
 
-ab1.on('object_added',function(snap){
-    console.log(snap.name(),snap.val(),snap.index());
-})
-
-ab1.on('object_changed',function(snap){
-    console.log(snap.name(),snap.val(),snap.index());
-});
-
-ab2.insert('age',5);
-//ab1.insert('hello',ab2);
-
+//ab1.insert('lolea',ab2);
 //ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
 
