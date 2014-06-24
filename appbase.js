@@ -80,7 +80,8 @@ ab.events.fireIntern = function(eventData,data){
             for (var id in ab.store.obj.parent.getParents(eventData.onId)){
                 var newData = ab.util.clone(data);
                 newData.name = ab.store.obj.parent.getParents(eventData.onId)[id].forKey;
-                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:id},newData); //TODO: data missing?
+                newData.prevIndex = 'index';
+                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:id},newData);
             }
             break;
 
@@ -90,7 +91,14 @@ ab.events.fireIntern = function(eventData,data){
             break;
 
         case ab.events.types.intern.object_changed:
-            //TODO: fire up.value - recursive listening.
+            if(typeof eventData.goUp == 'undefined' || eventData.goUp){
+                for (var id in ab.store.obj.parent.getParents(eventData.onId)){
+                    var newData = ab.util.clone(data);
+                    newData.name = ab.store.obj.parent.getParents(eventData.onId)[id].forKey;
+                    newData.prevIndex = 'index';
+                    ab.events.fireIntern({event:ab.events.types.intern.value,onId:id},newData);
+                }
+            }
             eventData.event = ab.events.types.extern.object_changed;
             ab.events.fireExtern(eventData,data);
             break;
@@ -178,7 +186,7 @@ var AppbaseSnapObj = function(path, eventData,objData){
                 return data.index;
             },
             prevIndex: function(){
-                return data.prevIndex;
+                return data.prevIndex == 'index'? data.index : data.prevIndex;
             },
             exportVal: function(){
                 //TODO:
@@ -621,7 +629,6 @@ ab.util.uuidToValuePro = function(uuid){
 }
 
 AppbaseObj.prototype.setSelfObj = function(obj,isNew){
-    console.log('arrived',obj);
     var fireNewValue = false;
 
     if(!isNew) {
@@ -685,7 +692,6 @@ AppbaseObj.prototype.generateSelfObj = function(){
         obj[key] = this.links[prop];
     }
 
-    console.log('generated:',obj);
 	return obj;
 }
 
@@ -745,7 +751,7 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
                 name:prop
             };
 
-            ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:this.id},data);
+            ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:this.id,goUp: (! isRemote)},data);
             console.log('changed')
 
             if(isRemote)
@@ -756,7 +762,7 @@ AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
     } else {
         if(!isRemote)
-            ab.events.fireIntern({event:ab.events.types.intern.object_added,onId:this.id},{id:(typeof val == typeof new Object()?val.uuid:null),val: (typeof val == typeof new Object()?undefined:val),prevVal:null,index:0,prevIndex:null,name:prop});
+            ab.events.fireIntern({event:ab.events.types.intern.object_added,onId:this.id,goUp: (! isRemote)},{id:(typeof val == typeof new Object()?val.uuid:null),val: (typeof val == typeof new Object()?undefined:val),prevVal:null,index:0,prevIndex:null,name:prop});
     }
 
 	if(!isRemote){
