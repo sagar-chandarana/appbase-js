@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <!-- IE compatibility -->
+    <script src="../libs/es5-shim.min.js"></script>
+    <script src="../libs/es5-sham.min.js"></script>
+    <script src="../libs/firebug-lite/content/firebug-lite-dev.js">
+        {
+            overrideConsole: true,
+            showIconWhenHidden :true,
+            startOpened: false,
+            enableTrace: true
+        }
+    </script>
+    <!-- IE compatibility -->
+
+    <meta charset="utf-8">
+  <title>QUnit Tests for Appbase.js</title>
+  <link rel="stylesheet" href="qunit-1.14.0.css">
+</head>
+<body>
+  <div id="qunit"></div>
+  <div id="qunit-fixture"></div>
+
+  <script src="qunit-1.14.0.js"></script>
+  <script src="../libs/socket.io.js"></script>
+  <script src="../libs/promise.js"></script>
+  <script src="../appbase.js"></script>
+  
+  <script src="tests.js"></script>
+</body>
+</html>

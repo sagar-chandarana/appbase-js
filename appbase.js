@@ -283,19 +283,35 @@ Appbase = {
         return key.slice(0,key.indexOf('_'));
     }
 
+    ab.util.cutLeadingTrailingSlashes = function(path){
+        while(path.charAt(path.length - 1) == '/') {
+            path = path.slice(0,-1);
+        }
+
+        while(path.charAt(0) == '/') {
+            path = path.slice(1);
+        }
+
+        return path;
+    }
+
     ab.util.front = function(path){
+        path = ab.util.cutLeadingTrailingSlashes(path);
         return path.indexOf('/') == -1? path: path.slice(0,path.indexOf('/'));
     }
 
     ab.util.cutFront = function(path){
+        path = ab.util.cutLeadingTrailingSlashes(path);
         return path.indexOf('/') == -1? '': path.slice(path.indexOf('/')+1);
     }
 
     ab.util.back = function(path){
+        path = ab.util.cutLeadingTrailingSlashes(path);
         return path.lastIndexOf('/') == -1? path: path.slice(path.lastIndexOf('/')+1);
     }
 
     ab.util.cutBack = function(path){
+        path = ab.util.cutLeadingTrailingSlashes(path);
         return path.lastIndexOf('/') == -1? '': path.slice(0,path.lastIndexOf('/'));
     }
 
@@ -574,21 +590,6 @@ Appbase = {
             var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
             return v.toString(16);
         });
-    }
-
-    ab.util.compare = function (obj1,obj2){
-
-        /*
-        for(var x in obj1){
-            if(obj1[x] != obj2[x])
-                return false;
-        }
-
-        for(var x in obj2){
-            if(obj1[x] != obj2[x])
-                return false;
-        }
-        */
     }
 
     ab.util.isNumber = function (n) {
@@ -981,19 +982,17 @@ Appbase = {
         return toExport;
     }
 
-
     //Exposing only a few functions
     Appbase.ref = function(arg,dontFetch){
         return AppbaseRef(arg,dontFetch);
     }
 
-    Appbase.new = function(arg){
+    Appbase.create = function(arg){
         return AppbaseRef(arg);
     }
 
-
     if(Appbase.debug){
-        Appbase.internal = {
+        Appbase.toHide = {
             ab:ab,
             AppbaseRef:AppbaseRef,
             AppbaseSnapObj: AppbaseSnapObj,
@@ -1004,14 +1003,3 @@ Appbase = {
     }
 
 })();
-
-ab1 = Appbase.new('albela/sajan4');
-//ab2 = Appbase.new('bella/vampire');
-
-ab1.on('value',function(snap){
-    console.log(snap.val());
-})
-
-//ab1.insert('lolea',ab2);
-//ab.util.pathToUuid('abc/xyz/lol',function(yo,lo){console.log(yo,lo)});
-
