@@ -1,5 +1,3 @@
-
-
 QUnit.module('hello');
 QUnit.test( "hello test", function( assert ) {
   assert.ok( 1 == "1", "Passed!" );
@@ -27,7 +25,7 @@ QUnit.module('Appbase globals');
 QUnit.test("Appbase debug mode",function(assert){
     if(debugMode){
         expect(2);
-        assert.ok(Appbase.debug,'Appbase.debug');
+        assert.ok(Appbase.debug,'Appbase.debug true');
         assert.ok(Appbase.toHide,'Appbase.toHide');
     } else {
         expect(1);
@@ -69,4 +67,49 @@ if(debugMode){
     });
 
     QUnit.module('DEBUG ON: AppbaseObj');
+    QUnit.test("Importing,exporting",function(assert){
+        expect(5);
+
+        var properties = {
+            one: 'one',
+            two:'two',
+            three:'three'
+        }
+
+        var serverObj = {
+            properties: JSON.stringify(properties),
+            uuid:Appbase.toHide.util.uuid(),
+            timestamp: new Date().getTime()
+            //,namespace:'gandu'
+        }
+
+        var abObj = new Appbase.toHide.AppbaseObj(serverObj);
+
+        assert.deepEqual(abObj.properties,properties,'import properties');
+        assert.deepEqual(abObj.uuid,serverObj.uuid,'import uuid');
+        assert.deepEqual(abObj.timestamp,serverObj.timestamp,'import timestamp');
+        //assert.deepEqual(abObj.namespace,serverObj.namespace,'import ns')
+        //TODO: links
+
+        properties = {
+            four: 'four',
+            five:'five'
+        }
+
+        serverObj = {
+            properties: JSON.stringify(properties),
+            timestamp: new Date().getTime()
+        }
+
+        abObj.setSelfObj(serverObj);
+
+        assert.deepEqual(abObj.properties,properties,'new props');
+        assert.deepEqual(abObj.timestamp,serverObj.timestamp,'new timestamp');
+        //TODO: links
+
+
+        assert.deepEqual(abObj.exportProps(),properties,'export props');
+    });
+
+
 }
