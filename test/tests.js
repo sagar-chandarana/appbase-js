@@ -21,7 +21,17 @@ QUnit.test("required libraries",function(assert){
 
 var debugMode = Appbase.debug;
 
-QUnit.module('Appbase globals');
+QUnit.module('Appbase globals',{
+    setup: function() {
+        Appbase.debug = {
+            ignoreGlobals: true
+        }
+    },
+    teardown: function() {
+        Appbase.debug = {
+        }
+    }
+});
 QUnit.test("Appbase debug mode",function(assert){
     if(debugMode){
         expect(2);
@@ -47,6 +57,18 @@ QUnit.test('Limiting Appbase global exposure',function(assert){
         assert.ok(allowedExposure.indexOf(key) > -1,'exposed: '+key);
     }
 });
+
+
+
+QUnit.test('Appbase.create should expect only two args, and strings should not contain " " and "/"',function(assert){
+    expect(3);
+    assert.throws(function() {Appbase.create('asd','asdas','asdasd')},'Expected only two arguments: namespace and key','No of args');
+    assert.throws(function() {Appbase.create('/asdasd/',"asdasd asd")},"Namespace and key should not contain blank-space or '/'","' ' and '/'");
+
+    Appbase.create('asd','asdas');
+    assert.ok(true,'Doesnt throw error');
+});
+
 
 if(debugMode){
     QUnit.module('DEBUG ON: Appbase internal methods');

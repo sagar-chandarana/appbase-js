@@ -969,11 +969,32 @@ Appbase = {
 
     //Exposing only a few functions
     Appbase.ref = function(arg,dontFetch){
+
+
+        if (Appbase.debug && Appbase.debug.ignoreGlobals)
+            return;
+
         return AppbaseRef(arg,dontFetch);
     }
 
-    Appbase.create = function(arg){
-        return AppbaseRef(arg);
+    Appbase.create = function(namespace,key){
+
+
+        if(arguments.length >2){
+            throw "Expected only two arguments: namespace and key";
+            return;
+        }
+
+        if(namespace.indexOf('/') > -1 || namespace.indexOf(' ') > -1|| key.indexOf('/')> -1|| key.indexOf(' ') > -1){
+            throw "Namespace and key should not contain blank-space or '/'";
+            return;
+        }
+
+
+        if (Appbase.debug && Appbase.debug.ignoreGlobals)
+            return;
+
+        return AppbaseRef(namespace+'/'+key);
     }
 
     if(Appbase.debug){
