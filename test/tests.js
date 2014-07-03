@@ -66,7 +66,19 @@ if(debugMode){
         test('/one','one','','one','');
     });
 
-    QUnit.module('DEBUG ON: AppbaseObj');
+    QUnit.module('DEBUG ON: AppbaseObj',{
+        setup: function() {
+            Appbase.debug = {
+                ignoreFire: true,
+                ignoreServerOut:true
+            }
+        },
+        teardown: function() {
+            Appbase.debug = {
+            }
+        }
+    });
+
     QUnit.test("Import - export",function(assert){
         expect(10);
 

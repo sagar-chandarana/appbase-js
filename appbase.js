@@ -26,7 +26,36 @@ Appbase = {
                         objs:{}
                     }
                 }
-                ,storage:{}
+                ,level1:{
+                    storage:{
+
+                    },
+                    get: function(key){
+                        console.log('getting',key);
+                        if(ab.store.obj.level1.storage[key]){
+                            return ab.store.obj.level1.storage[key];
+                        } else {
+                            var level2obj = ab.store.obj.level2.get(key);
+                            if (level2obj){
+                                ab.store.obj.level1.storage[key] = new AppbaseObj(level2obj);
+                                return ab.store.obj.level1.storage[key];
+                            }
+                        }
+                    },
+                    set: function(key,obj){
+                        console.log('setting',key);
+                        //ab.store.obj.level1.storage[key] = obj;
+                        //ab.store.obj.level2.set(key,obj.exportToServer());
+                    }
+                },
+                level2: {
+                    get: function(key){
+                        //return amplify.store(key);
+                    },
+                    set: function(key,obj){
+                        //amplify.store(key,obj);
+                    }
+                }
                 ,get:{}
                 ,parent:{
                     objs:{
@@ -64,6 +93,9 @@ Appbase = {
     }
 
     ab.events.fireIntern = function(eventData,data){
+        if(Appbase.debug && Appbase.debug.ignoreFire)
+            return;
+
         switch(eventData.event){
             case ab.events.types.intern.value:
                 ab.events.fireExtern(eventData,data);
@@ -332,7 +364,7 @@ Appbase = {
             createNew = false;
         }
 
-        if (typeof ab.store.obj.storage[uuid] == 'undefined'){
+        if (typeof ab.store.obj.level1.get(uuid) == 'undefined'){
 
             if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
                 ab.store.obj.get.noRq[uuid] = [callback];
@@ -355,8 +387,9 @@ Appbase = {
                                 return;
                             }
 
-                        if(typeof ab.store.obj.storage[uuid] == 'undefined'){
-                            ab.store.obj.storage[uuid] = new AppbaseObj(obj);
+                        if(! ab.store.obj.level1.get(uuid)){
+                            var newObj = new AppbaseObj(obj);
+                            ab.store.obj.level1.set(uuid,newObj);
                             if(isANewObj)
                                 ab.store.obj.put.nowId(uuid);
                         }
@@ -364,11 +397,13 @@ Appbase = {
 
                         if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
                             //real patcher
-                            ab.store.obj.storage[obj.uuid].importFromServer(obj,true);
+                            console.log('patching',obj);
+                            ab.store.obj.level1.get(obj.uuid).importFromServer(obj,true);
+                            //TODO: notify updated
                         } else { //get requests
                             while(ab.store.obj.get.noRq[uuid].length){
                                 cbc = ab.store.obj.get.noRq[uuid].shift();
-                                cbc(err,ab.store.obj.storage[uuid]);
+                                cbc(err,ab.store.obj.level1.get(uuid));
                             }
                             delete ab.store.obj.get.noRq[uuid];
                         }
@@ -380,7 +415,7 @@ Appbase = {
             }(uuid,createNew));
         }
         else{
-            callback(false,ab.store.obj.storage[uuid]);
+            callback(false,ab.store.obj.level1.get(uuid));
         }
     }
 
@@ -388,14 +423,12 @@ Appbase = {
     ab.store.obj.get.noRq = {};
 
     ab.store.obj.put.nowId = function (uuid){
+        if(Appbase.debug && Appbase.debug.ignoreServerOut)
+            return;
+
         if(typeof ab.store.obj.put.q.objs[uuid] == 'undefined')
             ab.store.obj.put.q.objs[uuid] = true;
             setTimeout(ab.store.obj.put.q.process,0);
-    }
-    ab.store.obj.put.nowRef = function(abRef){
-        abRef.uuid(function(err,uuid){
-            ab.store.obj.put.nowId(uuid);
-        });
     }
 
     ab.store.obj.put.q.isInProcess = false;
@@ -407,7 +440,7 @@ Appbase = {
         for (var uuid in ab.store.obj.put.q.objs){
             //if(ab.store.obj.put.q.objs[uuid]){
                 ab.store.obj.put.q.objs[uuid] = false;
-                ab.net.putByUuid(ab.store.obj.storage[uuid].exportToServer(),function(uuid){
+                ab.net.putByUuid(ab.store.obj.level1.get(uuid).exportToServer(),function(uuid){
                     return function(err){
                         delete ab.store.obj.put.q.objs[uuid];
                         if(err){
@@ -538,6 +571,8 @@ Appbase = {
 
         this.linksOrdered = [];
         this.changed = {};
+        this.properties = {};
+        this.timestamp = null;
 
         this.importFromServer(obj);
     }
@@ -556,15 +591,16 @@ Appbase = {
     AppbaseObj.prototype.importFromServer = function(obj,isNew,dontFire){
         //var fireNewValue = false;
 
+        var oldVal = null;
         if(!isNew) {
             this.uuid = obj.uuid;
             //this.namespace = obj.namespace;
         } else {
-            var oldVal = this.exportProps();
+            oldVal = this.exportProps();
         }
 
-        this.timestamp = obj.timestamp;
-        this.properties = JSON.parse(obj.properties);
+        obj.timestamp && (this.timestamp = obj.timestamp);
+        obj.properties && (this.properties = JSON.parse(obj.properties));
 
         /*
         delete obj["namespace"];
@@ -592,8 +628,7 @@ Appbase = {
                 this.insert(prop,val,order,true);
         }
         */
-
-        if(isNew && !dontFire){
+        if(isNew && ! dontFire){
             /*
             for (var prop in this.links)
                 if (! newProps[prop])
@@ -604,6 +639,7 @@ Appbase = {
                 ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
             //}
         }
+
     }
 
     AppbaseObj.prototype.exportToServer = function(){
@@ -622,29 +658,34 @@ Appbase = {
         return obj;
     }
 
-
     AppbaseObj.prototype.addProp = function(prop,val,callback){
         this.properties[prop] = val;
-        //fire events
-        //put obj
+
+        var oldVal = this.exportProps();
+        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
+
+        ab.store.obj.put.nowId(this.uuid);
     }
 
     AppbaseObj.prototype.removeProp = function(prop,callback){
         delete this.properties[prop];
-        //fire events
-        //put obj
+
+        var oldVal = this.exportProps();
+        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
+
+        ab.store.obj.put.nowId(this.uuid);
     }
 
     AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
 
         var oldSelfVal = this.exportProps();
         var oldObjVal = this.links[prop];
-        if (typeof oldObjVal == 'undefined' )
+        if (typeof oldObjVal == 'undefined')
             oldObjVal = null;
         else if(typeof oldObjVal == typeof new Object()){
 
-            if(typeof ab.store.obj.storage[oldObjVal.uuid] != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
-                oldObjVal = ab.store.obj.storage[oldObjVal.uuid].exportProps();
+            if(typeof ab.store.obj.level1.get(oldObjVal.uuid) != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
+                oldObjVal = ab.store.obj.level1.get(oldObjVal.uuid).exportProps();
             } else {
                 oldObjVal = null;
             }
@@ -721,8 +762,8 @@ Appbase = {
             return;
         } else if(typeof val == typeof new Object()){
             var objUuid = val.uuid;
-            if(typeof ab.store.obj.storage[val.uuid] != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
-                val = ab.store.obj.storage[val.uuid].exportProps();
+            if(typeof ab.store.obj.level1.get(val.uuid) != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
+                val = ab.store.obj.level1.get(val.uuid).exportProps();
             } else {
                 val = null;
             }
@@ -893,8 +934,7 @@ Appbase = {
 
         //init
         if (toHide._path == ab.util.front(toHide._path)){
-            var uuid = ab.util.uuid();
-            toHide._path = toHide._path+"/"+uuid;
+            toHide._path = toHide._path+"/"+ab.util.uuid();
         }
 
         if(ab.util.cutFront(ab.util.cutFront(path)).indexOf('/')>=0){
