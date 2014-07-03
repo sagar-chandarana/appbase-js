@@ -67,9 +67,11 @@ if(debugMode){
     });
 
     QUnit.module('DEBUG ON: AppbaseObj');
-    QUnit.test("Importing,exporting",function(assert){
-        expect(5);
+    QUnit.test("Import - export",function(assert){
+        expect(10);
 
+
+        //---------------import server obj-------------------
         var properties = {
             one: 'one',
             two:'two',
@@ -78,7 +80,7 @@ if(debugMode){
 
         var serverObj = {
             properties: JSON.stringify(properties),
-            uuid:Appbase.toHide.util.uuid(),
+            uuid:Appbase.toHide.ab.util.uuid(),
             timestamp: new Date().getTime()
             //,namespace:'gandu'
         }
@@ -91,24 +93,44 @@ if(debugMode){
         //assert.deepEqual(abObj.namespace,serverObj.namespace,'import ns')
         //TODO: links
 
+        //---------------new server obj-------------------
         properties = {
             four: 'four',
             five:'five'
         }
 
-        serverObj = {
+        var newServerObj = {
             properties: JSON.stringify(properties),
             timestamp: new Date().getTime()
         }
 
-        abObj.setSelfObj(serverObj);
+        abObj.importFromServer(newServerObj,true,true);
 
-        assert.deepEqual(abObj.properties,properties,'new props');
-        assert.deepEqual(abObj.timestamp,serverObj.timestamp,'new timestamp');
+        assert.deepEqual(abObj.properties,properties,'new server obj: props');
+        assert.deepEqual(abObj.timestamp,newServerObj.timestamp,'new server obj: timestamp');
         //TODO: links
 
+        ////---------------adding/removing/replacing properties----------------
+
+        properties['six'] = 'six';
+        abObj.addProp('six','six');
+        assert.deepEqual(abObj.properties,properties,'adding new prop');
+
+        properties['six'] = 'seven';
+        abObj.addProp('six','seven');
+        assert.deepEqual(abObj.properties,properties,'replacing a prop');
+
+        delete properties['four'];
+        abObj.removeProp('four');
+
+        assert.deepEqual(abObj.properties,properties,'removing a prop');
 
         assert.deepEqual(abObj.exportProps(),properties,'export props');
+
+        newServerObj.uuid = serverObj.uuid;
+        newServerObj.properties = JSON.stringify(properties);
+
+        assert.deepEqual(abObj.exportToServer(),newServerObj,'export for server');
     });
 
 
