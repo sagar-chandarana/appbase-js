@@ -472,6 +472,34 @@ Appbase = {
        });
     }
 
+    ab.net.listenToProperties = function (path,callback){
+
+    }
+
+    ab.net.listenToNamedEdges = function (path,callback){
+
+    }
+
+    ab.net.listenToOrderedEdges = function(path,callback){
+
+    }
+
+    ab.net.createObj = function(path,callback){
+
+    }
+
+    ab.net.patchProperty = function(path,obj,callback){
+
+    }
+
+    ab.net.destroy = function(path,callback){
+
+    }
+
+    ab.net.patchEdge = function(path,edge,callback){
+
+    }
+
     ab.net.putByUuid = function(obj, done) {
         ab.socket.emit('put', obj);
         done(false);
