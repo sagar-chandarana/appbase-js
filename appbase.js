@@ -833,7 +833,7 @@ Appbase = {
         }
 
 
-        toExport.on = function(event,fun,levels){
+        toExport.on = function(event,fun){
             //TODO: options
             if(! ab.events.types.extern[event] ){
                 throw new Error("Invalid event.");
