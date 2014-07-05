@@ -70,6 +70,7 @@ Appbase = {
         ab.network.socket = io.connect(ab.network.server);
 
         var listenToUuid = function(uuid) {
+            //add deduplication of listening
             ab.network.socket.emit('get', uuid);
             ab.network.socket.on(uuid, function(obj) {
                 obj = (obj == 'false'?false:obj);
@@ -105,11 +106,12 @@ Appbase = {
                 obj.timestamp = parseInt(obj.timestamp);
                 if(!ab.caching.inMemory[obj.id]){
                     ab.caching.inMemory[obj.id] = obj;
-                    amplify.publish('fromCache:data_arrived_from_server',obj.id);
-                } else if(ab.caching.inMemory[obj.id].timestamp > obj.timestamp ) {
-                //} else  {
+                    amplify.store(uuid,obj);
+                    amplify.publish('fromCache:data_arrived_from_server',obj.id,obj);
+                } else if(ab.caching.inMemory[obj.id].timestamp < obj.timestamp ) {
                     ab.caching.inMemory[obj.id] = obj;
-                    amplify.publish('fromCache:data_modified_by_server',obj.id);
+                    amplify.store(uuid,obj);
+                    amplify.publish('fromCache:data_modified_by_server',obj.id,obj);
                 }
             } else {
                 amplify.publish('fromCache:data_error_from_server',obj.id);
@@ -121,6 +123,7 @@ Appbase = {
         });
 
         amplify.subscribe('toCache:data_modified_locally fromCache:data_modified_locally',function(uuid){
+            amplify.store(uuid,ab.caching.inMemory[uuid]);
             amplify.publish('toServer:push_data',ab.caching.inMemory[uuid]);
         });
 
@@ -129,14 +132,21 @@ Appbase = {
                 if(ab.caching.inMemory[uuid]){
                     resolve(ab.caching.inMemory[uuid])
                 } else {
-                    amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                        error && reject(error);
+                    var fromPersistent = amplify.store(uuid);
+                    if(fromPersistent){
+                        ab.caching.inMemory[uuid] = fromPersistent;
+                        resolve(fromPersistent);
+                    } else {
 
-                        obj && resolve(ab.caching.inMemory[uuid]);
-                        !obj && resolve(false);
+                        amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                            error && reject(error);
 
-                        amplify.unsubscribe(topic,listenerName);
-                    })
+                            obj && resolve(ab.caching.inMemory[uuid]);
+                            !obj && resolve(false);
+
+                            amplify.unsubscribe(topic,listenerName);
+                        })
+                    }
 
                     amplify.publish('toServer:listen_to_data',uuid);
                 }
@@ -149,14 +159,14 @@ Appbase = {
             ab.caching.inMemory[uuid] = obj;
             obj.id = uuid;
             obj.timestamp = new Date().getTime().toString();
-            amplify.publish('fromCache:data_modified_locally',obj.id);
+            amplify.publish('fromCache:data_modified_locally',obj.id,obj);
         }
     }
 
     ab.firing.init = function(){
-        amplify.subscribe('fromCache:data_modified_by_server fromCache:data_modified_locally',function(uuid){
+        amplify.subscribe('fromCache:data_modified_by_server fromCache:data_modified_locally',function(uuid,obj){
             //snapshot creation
-            amplify.publish('fire:'+uuid);
+            amplify.publish('fire:'+uuid,obj);
         });
 
         ab.firing.add = function (uuid,callback){
