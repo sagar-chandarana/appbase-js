@@ -23,7 +23,8 @@ Appbase = {
         util:{},
         network:{},
         firing:{},
-        caching:{}
+        caching:{},
+        graph:{}
     }
 
     ab.util.cutLeadingTrailingSlashes = function(path){
@@ -163,6 +164,99 @@ Appbase = {
         }
     }
 
+    ab.graph.init = function(){
+
+        amplify.subscribe('properties',function(){
+
+        });
+
+        amplify.subscribe('edges',function(){
+
+        });
+
+        ab.graph.import_vertex = function(path,vertex){
+
+        };
+
+        ab.graph.vertexes = {};
+
+        ab.graph.path_vertex = {
+            storage:{},
+            get:function(path){
+                    if(ab.graph.path_vertex.storage[path]){
+                        Promise.resolve(ab.graph.path_vertex.storage[path])
+                    } else {
+                        return ab.caching.get('path_vertex',path);
+                    }
+            },
+            set: function(path,vertex){
+                ab.caching.set('path_vertex',path,vertex);
+            }
+        };
+
+        ab.graph.vertex_path = {};
+
+        ab.graph.path_out_edges = {
+            storage:{},
+            add:function(path){
+
+            },
+            remove:function(path){
+
+            },
+            get:function(path){
+                if(ab.graph.path_out_edges.storage[path]){
+                    Promise.resolve(ab.graph.path_out_edges.storage[path])
+                } else {
+                    return ab.caching.get('path_edges',path);
+                }
+            },
+            set: function(path,vertex){
+                ab.caching.set('path_edges',path,vertex);
+            }
+        };
+        ab.graph.uuid_in_edges = {};
+        //ab.graph.uuid_ordered_edges = {};
+
+        ab.graph.vertex = function() {
+            var uuid;
+            var outEdges;
+            var inEdges = {};
+            var properties;
+
+            var toExport = {
+                getProperties:function(){
+                    if(properties){
+                        return properties;
+                    } else {
+                        //request properties;
+                    }
+                },
+                getEdges: function(){
+                    if(outEdges){
+                        return outEdges;
+                    } else {
+                        //request edges;
+                    }
+                },
+                addProp: function(path,prop,val,callback){
+
+                },
+                removeProp: function(path,prop,callback){
+
+                },
+                addEdge: function(path,targetPath,name,callback){
+
+                },
+                removeEdge: function(path,name,callback){
+
+                }
+            }
+
+            return toExport;
+        };
+    }
+
     ab.firing.init = function(){
         amplify.subscribe('fromCache:data_modified_by_server fromCache:data_modified_locally',function(uuid,obj){
             //snapshot creation
@@ -188,6 +282,7 @@ Appbase = {
         ab.network.init();
         ab.caching.init();
         ab.firing.init();
+        ab.graph.init();
 
         Appbase.get = function(uuid,callback){
             return ab.firing.add(uuid,callback);
