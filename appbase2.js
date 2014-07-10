@@ -139,7 +139,103 @@ Appbase = {
 
     ab.graph.init = function(){
 
+        ab.graph.storage.get = function(what,key,extras){
+
+            return new Promise(function(resolve,reject){
+                var cached = ab.caching.get(what,key);
+
+                switch(what){
+                    case 'path_uuid':
+                        if(cached.val){
+                            resolve(cached.val);
+                        } else {
+                            /*TODO: fetch from server
+                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                             error && reject(error);
+
+                             obj && resolve(ab.caching.inMemory[uuid]);
+                             !obj && resolve(false);
+
+                             amplify.unsubscribe(topic,listenerName);
+                             })
+                             */
+
+                        }
+                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'uuid_vertex':
+                        if(cached.val){
+                            resolve(cached.val);
+                        } else {
+                            /*TODO: fetch from server, according to timestamp
+                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                             error && reject(error);
+
+                             obj && resolve(ab.caching.inMemory[uuid]);
+                             !obj && resolve(false);
+
+                             amplify.unsubscribe(topic,listenerName);
+                             })
+                             */
+
+                        }
+                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'path_vertex':
+
+                        ab.graph.storage.get('path_uuid',key)
+                            .then(function(uuid){
+                                if(!extras)
+                                    var extras = {};
+
+                                extras.path = key;
+
+                                return ab.graph.storage.get('uuid_vertex',uuid,extras);
+                            })
+                            .then(resolve,reject);
+                        break;
+
+                    case 'uuid_edges':
+                        if(cached.val){
+                            resolve(cached.val);
+                        } else {
+                            /*TODO: fetch from server, according to timestamp
+                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                             error && reject(error);
+
+                             obj && resolve(ab.caching.inMemory[uuid]);
+                             !obj && resolve(false);
+
+                             amplify.unsubscribe(topic,listenerName);
+                             })
+                             */
+                        }
+
+                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'path_edges':
+                        ab.graph.storage.get('path_uuid',key)
+                            .then(function(uuid){
+                                if(!extras)
+                                    var extras = {};
+
+                                extras.path = key;
+
+                                return ab.graph.storage.get('uuid_edges',uuid,extras).then(function(edges){
+                                    return Promise.resolve({uuid:uuid,edges:edges});
+                                });
+                            }).then(resolve,reject);
+                        break;
+
+                }
+            })
+        }
+
         ab.graph.storage.set = function(what,key,val,extras){
+            //promise
 
             switch(what){
                 case 'path_uuid':
@@ -153,11 +249,78 @@ Appbase = {
                     break;
 
                 case 'uuid_vertex':
+
                     /*
                      obj expected:
                      {
                          timestamp: blah,
                          properties: {
+                         }
+
+                     }
+                     */
+                    if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                        throw ('Object not valid.');
+                    }
+                    /* not needed, asby reaching here, it confirms that the path_uuid existed, and currently it also means that uuid_vertex exists
+                    if(extras.shouldExist){
+                        ab.graph.storage.get('uuid_vertex',key,extras)
+                        .then(function(storedVertex){
+                            if(storedVertex){
+                                if(extras.patch){
+                                    for(var prop in val.properties){
+                                        val.properties[prop] == null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+
+                                    }
+
+                                    val = storedVertex;
+                                }
+
+                                if(extras.isLocal)
+                                    val.timestamp = null;
+
+                                ab.caching.set(what,key,val);
+                                resolve();
+                                //TODO:event
+
+                            } else {
+                                reject("Vertex not found.")
+                            }
+
+                        },reject)
+                    } else { */
+                        var cached = ab.caching.get(what,key);
+                        var storedVertex = cached.val;
+
+                        if(extras.patch && storedVertex){
+                            for(var prop in val.properties){
+                                val.properties[prop] == null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+                            }
+
+                            val = storedVertex;
+                        }
+
+                        if(extras.isLocal)
+                            val.timestamp = null;
+
+
+
+                    //}
+                    val.prev = ab.caching.get(what,key);
+
+
+                    ab.caching.set(what,key,val);
+                    //TODO:event
+                    resolve();
+
+                    break;
+
+                case 'path_vertex':
+                     /*
+                     obj expected:
+                     {
+                        timestamp: blah,
+                        properties: {
                         }
 
                      }
@@ -167,28 +330,26 @@ Appbase = {
                         throw ('Object not valid.');
                     }
 
-                    ab.caching.set(what,key,val);
 
-                    break;
+                    if(!extras)
+                        var extras = {};
 
-                case 'path_vertex':
-                    /*
-                     obj expected:
-                     {
-                        uuid: blah,
-                        timestamp: blah,
-                        properties: {
-                        }
+                    extras.path = key;
 
-                     }
-                     */
+                    if(!val.uuid){
 
-                    if(typeof val != "object" ||  ! val.uuid || ! val.properties || typeof val.timestamp == 'undefined'){
-                        throw ('Object not valid.');
+                        ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                            ab.graph.storage.set('uuid_vertex',uuid,val,extras);
+                            resolve();
+                        },reject);
+
+                    } else {
+
+                        ab.graph.storage.set('path_uuid',key,val.uuid);
+                        ab.graph.storage.set('uuid_vertex',val.uuid,val,extras);
+
                     }
 
-                    ab.graph.storage.set('path_uuid',key,val.uuid);
-                    ab.graph.storage.set('uuid_vertex',val.uuid,val,{path:key});
                     //TODO: fire
                     break;
 
@@ -213,6 +374,8 @@ Appbase = {
                     if(typeof val != "object" ||  ! val.linkName ||  typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
+
+
 
                     for(var edgeName in val){
                         if(val[edgeName].data){
@@ -255,109 +418,30 @@ Appbase = {
                         throw ('Object not valid.');
                     }
 
+                    if(!extras)
+                        var extras = {};
+
+                    extras.path = key;
+
                     if(!val.uuid){
 
                         ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                            ab.graph.storage.set('uuid_edges',uuid,val,{path:key});
+                            ab.graph.storage.set('uuid_edges',uuid,val,extras);
                         });
 
                     } else {
 
-                        ab.graph.storage.set('path_uuid',key,val.uuid)
-                        ab.graph.storage.set('uuid_edges',val.uuid,val,{path:key});
+                        ab.graph.storage.set('path_uuid',key,val.uuid);
+                        ab.graph.storage.set('uuid_edges',val.uuid,val,extras);
 
                     }
-
-                    //TODO: fire
 
                     break;
 
             }
         }
 
-        ab.graph.storage.get = function(what,key,extras){
 
-            return new Promise(function(resolve,reject){
-                var cached = ab.caching.get(what,key);
-
-                switch(what){
-                    case 'path_uuid':
-                        if(cached.val){
-                            resolve(cached.val);
-                        } else {
-                            /*TODO: fetch from server
-                            amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                                error && reject(error);
-
-                                obj && resolve(ab.caching.inMemory[uuid]);
-                                !obj && resolve(false);
-
-                                amplify.unsubscribe(topic,listenerName);
-                            })
-                            */
-
-                        }
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
-                        break;
-
-                    case 'uuid_vertex':
-                        if(cached.val){
-                            resolve(cached.val);
-                        } else {
-                            /*TODO: fetch from server, according to timestamp
-                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                             error && reject(error);
-
-                             obj && resolve(ab.caching.inMemory[uuid]);
-                             !obj && resolve(false);
-
-                             amplify.unsubscribe(topic,listenerName);
-                             })
-                             */
-
-                        }
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
-                        break;
-
-                    case 'path_vertex':
-                        ab.graph.storage.get('path_uuid',key)
-                        .then(function(uuid){
-                            return ab.graph.storage.get('uuid_vertex',uuid,{path:key});
-                        })
-                        .then(resolve,reject);
-                        break;
-
-                    case 'uuid_edges':
-                        if(cached.val){
-                            resolve(cached.val);
-                        } else {
-                            /*TODO: fetch from server, according to timestamp
-                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                             error && reject(error);
-
-                             obj && resolve(ab.caching.inMemory[uuid]);
-                             !obj && resolve(false);
-
-                             amplify.unsubscribe(topic,listenerName);
-                             })
-                             */
-                        }
-
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
-                        break;
-
-                    case 'path_edges':
-                        ab.graph.storage.get('path_uuid',key)
-                            .then(function(uuid){
-                                return ab.graph.storage.get('uuid_edges',uuid,{path:key}).then(function(edges){
-                                    return Promise.resolve({uuid:uuid,edges:edges});
-                                });
-                            }).then(resolve,reject);
-                        break;
-
-                }
-            })
-        }
 
         amplify.subscribe('toGraph:vertex',function(path,vertex,localCallback){
             if(localCallback){
@@ -394,35 +478,19 @@ Appbase = {
             },
             set: function(path,vertex,localCallback){
                 if(localCallback){
-                    ab.graph.path_vertex.get(path).then(
-                        function(storedVertex){
-                            if(storedVertex){
-                                for(var prop in vertex.properties){
-                                    storedVertex.properties[prop] = vertex.properties[prop];
-                                    storedVertex.timestamp = null; //locally changed
-                                }
+                    ab.graph.storage.set('path_vertex',path,vertex,{patch:true,isLocal:true})
+                    .then(function(){
 
-                                ab.graph.storage.set('path_vertex',path,storedVertex);
+                        //server;
+                        //localCallback;
 
-                                //TODO: server, localCallback
-                            } else {
-                                localCallback("Vertex not found.")
-                            }
+                    },localCallback);
 
-                        },
-                        function(error){
-                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
-                        }
-                    )
+
                 } else {
                     //server data has changed
                     ab.graph.storage.set('path_vertex',path,vertex);
                 }
-
-
-
-
-
             }
         };
 
@@ -446,27 +514,34 @@ Appbase = {
                     var edgeName = edges.keys()[0];
                     var edgePath = edges[edgeName];
 
+                    if(edgePath){
+                        ab.graph.path_vertex.get(edgePath).then(
+                            function(edgeVertex){
+                                if(edgeVertex){
 
-                    ab.graph.path_vertex.get(edgePath).then(
-                        function(edgeVertex){
-                            if(edgeVertex){
+                                    edges[edgeName] = {
+                                        timestamp: null
+                                    };
 
-                                edges[edgeName] = {
-                                    timestamp: null
-                                };
+                                    storeEdges();
+                                    handleServer();
+                                } else {
+                                    localCallback("Vertex not found.")
+                                }
 
-                                storeEdges();
 
-                                //TODO: server, localCallback
-                            } else {
-                                localCallback("Vertex not found.")
+                            },function(error){
+                                localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
                             }
+                        );
+                    } else {
+                        storeEdges();
+                        handleServer();
+                    }
 
-
-                        },function(error){
-                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
-                        }
-                    );
+                    var handleServer = function(){
+                        //TODO: server, localCallback
+                    };
 
 
                 } else {
