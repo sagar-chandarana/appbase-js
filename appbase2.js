@@ -111,12 +111,12 @@ Appbase = {
             }
 
             if(ab.caching.inMemory[key]){
-                return {val:ab.caching.inMemory[key],isFresh:true}
+                return {val:Object.clone(ab.caching.inMemory[key]),isFresh:true}
             } else {
                 var fromPersistent = amplify.store(key);
                 if(fromPersistent){
                     ab.caching.inMemory[key] = fromPersistent;
-                    return {val:fromPersistent,isFresh:false};
+                    return {val:Object.clone(fromPersistent),isFresh:false};
                 } else {
                     {isFresh:false};
                 }
@@ -139,11 +139,7 @@ Appbase = {
 
     ab.graph.init = function(){
 
-        ab.graph.storage.set = function(what,key,val,extras,localCallback){
-            if(!localCallback && typeof extras == "function"){
-                var localCallback = extras;
-                delete extras;
-            }
+        ab.graph.storage.set = function(what,key,val,extras){
 
             switch(what){
                 case 'path_uuid':
@@ -167,7 +163,7 @@ Appbase = {
                      }
                      */
 
-                    if(typeof val != "object" || ! val.properties || ( !localCallback && typeof val.timestamp == 'undefined')){
+                    if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
 
@@ -187,81 +183,91 @@ Appbase = {
                      }
                      */
 
-                    if(typeof val != "object" ||  ! val.uuid || ! val.properties || ( !localCallback && typeof val.timestamp == 'undefined')){
+                    if(typeof val != "object" ||  ! val.uuid || ! val.properties || typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
 
                     ab.graph.storage.set('path_uuid',key,val.uuid);
                     ab.graph.storage.set('uuid_vertex',val.uuid,val,{path:key});
-                    //TODO: server, localCallback
                     //TODO: fire
                     break;
 
                 case 'uuid_edges':
                     /*
                      obj expected:
-                     [
-                        {
-                            linkName: 'blah',
-                            timestamp: 'yo',
-                            data: {
+                     {
+                         'linkName': {
+
+                             timestamp: 'yo',
+                             data: {
                                  uuid: blah,
                                  timestamp: blah,
                                  properties: {
                                  }
-                            }
-                        }
+                             }
+                         }
 
-                     ]
+                     }
                      */
 
-                    if(typeof val != "object" ||  ! val.linkName || ( !localCallback && typeof val.timestamp == 'undefined')){
+                    if(typeof val != "object" ||  ! val.linkName ||  typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
 
-                    val.forEach(function(edge){
-                        if(edge.data){
-                            var path = extras.path+'/'+edge.linkName;
-                            var vertex = edge.data;
+                    for(var edgeName in val){
+                        if(val[edgeName].data){
+                            var path = extras.path+'/'+edgeName;
+                            var vertex = val[edgeName].data;
 
                             ab.graph.storage.set('path_vertex',path,vertex);
-                            delete edge.data;
+                            delete val[edgeName].data;
                         }
-                    })
+
+                        //TODO:firing event
+                    }
 
                     ab.caching.set(what,key,val);
-                    //fire event
 
                     break;
 
                 case 'path_edges':
                     /*
                      obj expected:
-                     {
-                         uuid: blah,
-                         edges: [
-                             {
-                             linkName: 'blah',
-                             timestamp: 'yo',
-                                 data: {
-                                 uuid: blah,
-                                 timestamp: blah,
-                                 properties: {
-                                    }
-                                 }
-                             }
 
-                         ]
-                     }
+
+                         {
+                                'linkName': {
+
+                                     timestamp: 'yo',
+                                     data: {
+                                         uuid: blah,
+                                         timestamp: blah,
+                                         properties: {
+                                            }
+                                     }
+                                }
+
+                         }
+
                      */
 
-                    if(typeof val != "object" ||  ! val.uuid || ! val.properties || ( !localCallback && typeof val.timestamp == 'undefined')){
+                    if(typeof val != "object"  || ! val.properties || typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
 
-                    ab.graph.storage.set('path_uuid',key,val.uuid);
-                    ab.graph.storage.set('uuid_edges',val.uuid,val,{path:key});
-                    //TODO: server, localCallback
+                    if(!val.uuid){
+
+                        ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                            ab.graph.storage.set('uuid_edges',uuid,val,{path:key});
+                        });
+
+                    } else {
+
+                        ab.graph.storage.set('path_uuid',key,val.uuid)
+                        ab.graph.storage.set('uuid_edges',val.uuid,val,{path:key});
+
+                    }
+
                     //TODO: fire
 
                     break;
@@ -387,7 +393,36 @@ Appbase = {
                 return ab.graph.storage.get('path_vertex',path);
             },
             set: function(path,vertex,localCallback){
-                ab.graph.storage.set('path_vertex',path,vertex,localCallback);
+                if(localCallback){
+                    ab.graph.path_vertex.get(path).then(
+                        function(storedVertex){
+                            if(storedVertex){
+                                for(var prop in vertex.properties){
+                                    storedVertex.properties[prop] = vertex.properties[prop];
+                                    storedVertex.timestamp = null; //locally changed
+                                }
+
+                                ab.graph.storage.set('path_vertex',path,storedVertex);
+
+                                //TODO: server, localCallback
+                            } else {
+                                localCallback("Vertex not found.")
+                            }
+
+                        },
+                        function(error){
+                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
+                        }
+                    )
+                } else {
+                    //server data has changed
+                    ab.graph.storage.set('path_vertex',path,vertex);
+                }
+
+
+
+
+
             }
         };
 
@@ -396,7 +431,72 @@ Appbase = {
                 return ab.graph.storage.get('path_edges',path);
             },
             set: function(path,edges,localCallback){
-                ab.graph.storage.set('path_edges',path,edges,localCallback);
+                if(localCallback){
+                    /*
+                    expected when local
+                    edges: {
+                        'edgeName':path
+                    } - only one edge
+                     */
+                    if(edges.length >1){
+                        throw ('Only one edge should be added  at once, locally')
+                        return;
+                    }
+
+                    var edgeName = edges.keys()[0];
+                    var edgePath = edges[edgeName];
+
+
+                    ab.graph.path_vertex.get(edgePath).then(
+                        function(edgeVertex){
+                            if(edgeVertex){
+
+                                edges[edgeName] = {
+                                    timestamp: null
+                                };
+
+                                storeEdges();
+
+                                //TODO: server, localCallback
+                            } else {
+                                localCallback("Vertex not found.")
+                            }
+
+
+                        },function(error){
+                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
+                        }
+                    );
+
+
+                } else {
+                    //server data has changed
+                    storeEdges();
+                }
+
+                var storeEdges = function(){
+                    //TODO: patch mechanism
+                    ab.graph.path_out_edges.get(path).then(
+                        function(storedEdges){
+                            if(storedEdges){
+                                for(var edgeName in edges){
+                                    storedEdges[edgeName] = edges[edgeName];
+                                }
+
+                                ab.graph.storage.set('path_vertex',path,storedEdges);
+
+                                //TODO: server, localCallback
+                            } else {
+                                localCallback("Vertex not found.")
+                            }
+
+                        },
+                        function(error){
+                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
+                        }
+                    )
+                }
+
             }
         };
 
