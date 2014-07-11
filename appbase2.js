@@ -259,38 +259,19 @@ Appbase = {
 
                      }
                      */
+
+
                     if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
                         throw ('Object not valid.');
                     }
-                    /* not needed, asby reaching here, it confirms that the path_uuid existed, and currently it also means that uuid_vertex exists
-                    if(extras.shouldExist){
-                        ab.graph.storage.get('uuid_vertex',key,extras)
-                        .then(function(storedVertex){
-                            if(storedVertex){
-                                if(extras.patch){
-                                    for(var prop in val.properties){
-                                        val.properties[prop] == null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
 
-                                    }
-
-                                    val = storedVertex;
-                                }
-
-                                if(extras.isLocal)
-                                    val.timestamp = null;
-
-                                ab.caching.set(what,key,val);
-                                resolve();
-                                //TODO:event
-
-                            } else {
-                                reject("Vertex not found.")
-                            }
-
-                        },reject)
-                    } else { */
+                    var storeNow = function(){
                         var cached = ab.caching.get(what,key);
                         var storedVertex = cached.val;
+
+                        if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
+                            return;
+                        }
 
                         if(extras.patch && storedVertex){
                             for(var prop in val.properties){
@@ -303,17 +284,30 @@ Appbase = {
                         if(extras.isLocal)
                             val.timestamp = null;
 
+                        val.prev = ab.caching.get(what,key);
 
+                        ab.caching.set(what,key,val);
+                        //TODO:event
+                        resolve();
+                    }
 
-                    //}
-                    val.prev = ab.caching.get(what,key);
+                    if(extras.shouldExist){
+                        ab.graph.storage.get('uuid_vertex',key,extras)
+                        .then(function(storedVertex){
+                            if(storedVertex){
+                                storeNow();
+                            } else {
+                                reject("Vertex not found.")
+                            }
 
+                        },reject);
+                    } else {
+                        storeNow();
+                    }
 
-                    ab.caching.set(what,key,val);
-                    //TODO:event
-                    resolve();
 
                     break;
+
 
                 case 'path_vertex':
                      /*
@@ -371,25 +365,54 @@ Appbase = {
                      }
                      */
 
-                    if(typeof val != "object" ||  ! val.linkName ||  typeof val.timestamp == 'undefined'){
-                        throw ('Object not valid.');
-                    }
+                    var storeNow = function(){
 
+                        for(var edgeName in val){
+                            //validation
 
+                            if(val[edgeName] && val[edgeName].data){
+                                var path = extras.path+'/'+edgeName;
+                                var vertex = val[edgeName].data;
 
-                    for(var edgeName in val){
-                        if(val[edgeName].data){
-                            var path = extras.path+'/'+edgeName;
-                            var vertex = val[edgeName].data;
+                                ab.graph.storage.set('path_vertex',path,vertex);
+                                delete val[edgeName].data;
+                            }
 
-                            ab.graph.storage.set('path_vertex',path,vertex);
-                            delete val[edgeName].data;
                         }
 
-                        //TODO:firing event
+                        var cached = ab.caching.get(what,key);
+                        var storedEdges = cached.val;
+
+                        if(extras.patch && storedEdges){
+                            for(var edgeName in val){
+                                //TODO: timestamps, server edge delete flag
+                                val[edgeName] == null? delete storedEdges[edgeName] : storedEdges[edgeName] = val[edgeName];
+                                //TODO:fire events
+                                //TODO: in edges
+                            }
+
+                            val = storedEdges;
+                        }
+
+                        ab.caching.set(what,key,val);
+
+                        resolve();
                     }
 
-                    ab.caching.set(what,key,val);
+                    if(extras.shouldExist){
+                        ab.graph.storage.get('uuid_vertex',key,extras)
+                            .then(function(storedVertex){
+                                if(storedVertex){
+                                    storeNow();
+                                } else {
+                                    reject("Vertex not found.")
+                                }
+
+                            },reject);
+                    } else {
+                        storeNow();
+                    }
+
 
                     break;
 
@@ -498,7 +521,9 @@ Appbase = {
             get:function(path){
                 return ab.graph.storage.get('path_edges',path);
             },
-            set: function(path,edges,localCallback){
+            set: function(path,edges,extras){
+                var localCallback = extras.isLocal? extras.localCallback:false;
+
                 if(localCallback){
                     /*
                     expected when local
@@ -523,8 +548,7 @@ Appbase = {
                                         timestamp: null
                                     };
 
-                                    storeEdges();
-                                    handleServer();
+                                    storeEdges().then(handleServer);
                                 } else {
                                     localCallback("Vertex not found.")
                                 }
@@ -535,8 +559,7 @@ Appbase = {
                             }
                         );
                     } else {
-                        storeEdges();
-                        handleServer();
+                        storeEdges().then(handleServer);
                     }
 
                     var handleServer = function(){
@@ -550,21 +573,10 @@ Appbase = {
                 }
 
                 var storeEdges = function(){
-                    //TODO: patch mechanism
-                    ab.graph.path_out_edges.get(path).then(
-                        function(storedEdges){
-                            if(storedEdges){
-                                for(var edgeName in edges){
-                                    storedEdges[edgeName] = edges[edgeName];
-                                }
+                    ab.graph.storage.set('path_edges',path,edges,localCallback?{isLocal:true,shouldExist:true,patch:true}:extras).then(
+                        function(){
 
-                                ab.graph.storage.set('path_vertex',path,storedEdges);
-
-                                //TODO: server, localCallback
-                            } else {
-                                localCallback("Vertex not found.")
-                            }
-
+                           //TODO: server, localCallback
                         },
                         function(error){
                             localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
