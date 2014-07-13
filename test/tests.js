@@ -95,9 +95,9 @@ if(debugMode){
 
     QUnit.module('DEBUG ON: Appbase global methods');
     QUnit.test('Appbase.create',function(assert){
-        //Appbase.create('lol','yello',function(error){
-        //    assert.equal(error,"Vertex already exists.",'throw error for existing object');
-        //});
+        Appbase.create('lol','yello',function(error){
+            assert.equal(error,"Vertex already exists.",'throw error for existing object');
+        });
 
         var random_key = ab.util.uuid();
 
@@ -109,11 +109,50 @@ if(debugMode){
 
         });
 
-
-
-
     });
 
+    QUnit.test('Appbase.ref',function(assert){
+        var path = 'lol/yello';
+        var abRef = Appbase.ref(path);
+
+        var prop = 'abc';
+        var value = 'pqr';
+        var prop1 = 'lol';
+        var val1 = 'lala';
+
+        abRef.properties.add(prop,value,function(error){
+            assert.ok(error,'no error');
+
+            Appbase.debug.ab.graph.storage.get('path_vertex',path).then(function(vertex){
+                assert.equal(vertex.properties[prop],value,'property0 is added.');
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.properties.add(prop1,val1,function(error){
+            assert.ok(error,'no error');
+
+            Appbase.debug.ab.graph.storage.get('path_vertex',path).then(function(vertex){
+                assert.equal(vertex.properties[prop1],val1,'property1 is added.');
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.properties.remove(prop,function(error){
+            assert.ok(error,'no error');
+
+
+            Appbase.debug.ab.graph.storage.get('path_vertex',path).then(function(vertex){
+                assert.equal(vertex.properties[prop],undefined,'property0 is removed.');
+                assert.equal(vertex.properties[prop1],val1,'property1 still exists.');
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+    });
 
     /*
 

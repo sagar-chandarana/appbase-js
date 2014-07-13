@@ -265,7 +265,7 @@ Appbase = {
                 switch(what){
                     case 'path_uuid':
                         /*expected string*/
-                        if(typeof val != "string"){
+                        if(typeof val != "string" && !extras.destroy){
                             reject ('UUID must be a string');
                         }
 
@@ -289,7 +289,8 @@ Appbase = {
 
 
                         if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                            reject ('Object not valid.');
+                            if(!extras.destroy)
+                                reject ('Object not valid.');
                         }
 
 
@@ -297,7 +298,8 @@ Appbase = {
                         var storedVertex = cached? cached.val:undefined;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
-                            reject('Object not valid.');
+                            if(!extras.destroy)
+                                reject('Object not valid.');
                         }
 
                         if(extras.patch && storedVertex){
@@ -311,7 +313,10 @@ Appbase = {
                         if(extras.isLocal)
                             val.timestamp = null;
 
-                        val.prev = ab.caching.get(what,key);
+
+                        //todo: preserve server's version, with a timestamp
+                        val.prev = ab.caching.get(what,key)? ab.caching.get(what,key).val:undefined;
+                        val.prev && delete val.prev.prev; //delete older state
 
                         ab.caching.set(what,key,val);
                         //TODO:event
@@ -332,7 +337,7 @@ Appbase = {
                          }
                          */
 
-                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                        if((typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined') && (val != null)){
                             reject ('Object not valid.');
                         }
 
@@ -341,10 +346,20 @@ Appbase = {
 
                         var storeNow = function(){
 
-                            if(!val.uuid){
+                            if(!val || !val.uuid){
                                 ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                                    ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
-                                },reject);
+                                    if(!val){
+                                        extras.uuid = uuid;
+                                    }
+                                    return ab.graph.storage.set('uuid_vertex',uuid,val,extras);
+
+                                }).then(function(){
+                                    if(!val)
+                                        return  ab.graph.storage.set('path_uuid',null);
+                                    else
+                                        return Promise.resolve();
+                                }).then(resolve,reject);
+
 
                             } else {
                                 ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
@@ -551,8 +566,7 @@ Appbase = {
                 if(!extras)
                     extras = {};
 
-
-                return ab.graph.storage.set('path_vertex',path,vertex,extras)
+                return ab.graph.storage.set('path_vertex',path,vertex,extras);
             }
         };
 
@@ -631,7 +645,6 @@ Appbase = {
                 return ab.graph.storage.get('path_in_edge_paths',path);
             }
         };
-
     }
 
     ab.firing.init = function(){
@@ -655,26 +668,6 @@ Appbase = {
     }
 
     ab.interface.init = function(){
-        ab.interface.global = {};
-
-        ab.interface.global.create = function(collection,key,localCallback){
-            if(!key){
-              var key = ab.util.uuid(); //TODO: it should not contain numbers
-            }
-
-            //TODO: serverside creation of UUIDs for new objects
-            ab.graph.path_vertex.set(collection+'/'+key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true,shouldExist:false}).then(function(){
-
-                localCallback && localCallback(false);
-
-            },localCallback ? localCallback: function(error){
-                throw error;
-            });
-
-            return ab.interface.ref_obj('collection'+'/'+'key');
-        }
-
-        ab.interface.global.ref = ab.interface.ref_obj;
 
         ab.interface.ref_obj = function(path,lite){
 
@@ -700,19 +693,38 @@ Appbase = {
             }
 
             exports.properties.add = function(prop,val,localCallback){
+                var vertex = {properties:{}};
+                vertex.properties[prop] = val;
 
+                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+                    localCallback && localCallback(false);
+                },localCallback ? localCallback: function(error){
+                    throw error;
+                });
             }
 
             exports.properties.commit = function(prop,apply,localCallback){
-
+                //todo:
             }
 
             exports.properties.remove = function(prop,localCallback){
+                var vertex = {properties:{}};
+                vertex.properties[prop] = null;
 
+                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+                    localCallback && localCallback(false);
+                },localCallback ? localCallback: function(error){
+                    throw error;
+                });
             }
 
             exports.destroy = function(localCallback){
 
+                ab.graph.path_vertex.set(priv.path,null,{destroy:true}).then(function(){
+                    localCallback && localCallback(false);
+                },localCallback ? localCallback: function(error){
+                    throw error;
+                });
             }
 
             exports.on = function(){
@@ -726,6 +738,27 @@ Appbase = {
             return exports;
 
         }
+
+        ab.interface.global = {};
+
+        ab.interface.global.create = function(collection,key,localCallback){
+            if(!key){
+              var key = ab.util.uuid(); //TODO: it should not contain numbers
+            }
+
+            //TODO: serverside creation of UUIDs for new objects
+            ab.graph.path_vertex.set(collection+'/'+key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true,shouldExist:false}).then(function(){
+
+                localCallback && localCallback(false);
+
+            },localCallback ? localCallback: function(error){
+                throw error;
+            });
+
+            return ab.interface.ref_obj('collection'+'/'+'key');
+        }
+
+        ab.interface.global.ref = ab.interface.ref_obj;
 
         Appbase.create = ab.interface.global.create;
         Appbase.ref = ab.interface.global.ref;
