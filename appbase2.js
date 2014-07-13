@@ -515,37 +515,6 @@ Appbase = {
             })
         }
 
-
-
-        amplify.subscribe('toGraph:vertex',function(path,vertex,localCallback){
-            if(localCallback){
-                ab.graph.path_vertex.get(path).then(function(vertex){
-                    if(vertex){
-                        ab.graph.path_vertex.set(path,vertex,localCallback);
-                    } else {
-                        callback("Vertex not found.")
-                    }
-                });
-            } else {
-                ab.graph.path_vertex.set(path,vertex);
-            }
-        });
-
-        amplify.subscribe('toGraph:edges',function(path,edges,localCallback){
-            if(localCallback){
-                ab.graph.path_out_edges.get(path).then(function(edges){
-                    if(edges){
-                        ab.graph.path_out_edges.set(path,edges,localCallback);
-
-                    } else {
-                        callback("Vertex not found.");
-                    }
-                });
-            } else {
-                ab.graph.path_out_edges.set(path,edges);
-            }
-        });
-
         ab.graph.path_vertex = {
             get:function(path){
                 return ab.graph.storage.get('path_vertex',path);
@@ -673,11 +642,11 @@ Appbase = {
             }
 
             exports.out = function(edgeName){
-                return ab.interface.ref_obj(priv.path + '/' +edgeName);
+                return ab.interface.ref_obj(priv.path + '/' +edgeName,true);
             }
 
             exports.in = function(){
-                return ab.interface.ref_obj(ab.util.cutBack(priv.path));
+                return ab.interface.ref_obj(ab.util.cutBack(priv.path),true);
             }
 
             exports.properties.add = function(prop,val,localCallback){
