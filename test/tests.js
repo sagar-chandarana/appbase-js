@@ -20,7 +20,7 @@ QUnit.test("required libraries",function(assert){
 });
 
 var debugMode = Appbase.debug;
-
+/*
 QUnit.module('Appbase globals',{
     setup: function() {
         Appbase.debug = {
@@ -32,11 +32,13 @@ QUnit.module('Appbase globals',{
         }
     }
 });
+*/
+
 QUnit.test("Appbase debug mode",function(assert){
     if(debugMode){
         expect(2);
         assert.ok(Appbase.debug,'Appbase.debug true');
-        assert.ok(Appbase.toHide,'Appbase.toHide');
+        assert.ok(Appbase.debug.ab,'Appbase.debug.ab');
     } else {
         expect(1);
         assert.ok(true,'Appbase not in debug mode.');
@@ -47,9 +49,9 @@ QUnit.test("Appbase debug mode",function(assert){
 QUnit.test('Limiting Appbase global exposure',function(assert){
     var allowedExposure;
     if (debugMode){
-        allowedExposure = ['toHide','debug','create','ref'];
+        allowedExposure = ['debug','create','ref'];
     } else {
-        allowedExposure = ['new','ref'];
+        allowedExposure = ['create','ref'];
     }
 
     expect(allowedExposure.length);
@@ -59,7 +61,7 @@ QUnit.test('Limiting Appbase global exposure',function(assert){
 });
 
 
-
+/*
 QUnit.test('Appbase.create should expect only two args, and strings should not contain " " and "/"',function(assert){
     expect(3);
     assert.throws(function() {Appbase.create('asd','asdas','asdasd')},'Expected only two arguments: namespace and key','No of args');
@@ -68,25 +70,52 @@ QUnit.test('Appbase.create should expect only two args, and strings should not c
     Appbase.create('asd','asdas');
     assert.ok(true,'Doesnt throw error');
 });
+*/
+
 
 
 if(debugMode){
     QUnit.module('DEBUG ON: Appbase internal methods');
     QUnit.test( "path manipulation methods", function( assert ) {
         expect(13);
-        assert.equal(Appbase.toHide.ab.util.cutLeadingTrailingSlashes('//one/two//'),'one/two','leading-trailing    slashes');
+        assert.equal(Appbase.debug.ab.util.cutLeadingTrailingSlashes('//one/two//'),'one/two','leading-trailing    slashes');
 
         var test = function(path,front,cutFront,back,cutBack) {
-            assert.equal(Appbase.toHide.ab.util.front(path), front,'path:'+path+ ' front-test');
-            assert.equal(Appbase.toHide.ab.util.cutFront(path), cutFront,'path:'+path+ ' cutFront-test');
-            assert.equal(Appbase.toHide.ab.util.back(path), back,'path:'+path+ ' back-test');
-            assert.equal(Appbase.toHide.ab.util.cutBack(path), cutBack,'path:'+path+ ' cutBack-test');
+            assert.equal(Appbase.debug.ab.util.front(path), front,'path:'+path+ ' front-test');
+            assert.equal(Appbase.debug.ab.util.cutFront(path), cutFront,'path:'+path+ ' cutFront-test');
+            assert.equal(Appbase.debug.ab.util.back(path), back,'path:'+path+ ' back-test');
+            assert.equal(Appbase.debug.ab.util.cutBack(path), cutBack,'path:'+path+ ' cutBack-test');
         }
 
         test('/one/two/three','one','two/three','three','one/two');
         test('/one/two','one','two','two','one');
         test('/one','one','','one','');
     });
+
+
+    QUnit.module('DEBUG ON: Appbase global methods');
+    QUnit.test('Appbase.create',function(assert){
+        //Appbase.create('lol','yello',function(error){
+        //    assert.equal(error,"Vertex already exists.",'throw error for existing object');
+        //});
+
+        var random_key = ab.util.uuid();
+
+        Appbase.create('lol',random_key,function(error){
+            assert.ok(!error,'No error for a new object');
+            var uuid = Appbase.debug.ab.caching.get('path_uuid','lol/'+random_key);
+            assert.ok(uuid.val,'path_uuid exists for the new object');
+            assert.ok(Appbase.debug.ab.caching.get('uuid_vertex',uuid.val),'vertex_uuid exists for the new object');
+
+        });
+
+
+
+
+    });
+
+
+    /*
 
     QUnit.module('DEBUG ON: AppbaseObj',{
         setup: function() {
@@ -167,6 +196,7 @@ if(debugMode){
         assert.deepEqual(abObj.exportToServer(),newServerObj,'export for server');
     });
 
+    */
 
 }
 

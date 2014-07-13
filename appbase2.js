@@ -24,7 +24,9 @@ Appbase = {
         network:{},
         firing:{},
         caching:{},
-        graph:{}
+        graph:{},
+        interface:{},
+        debug:{}
     }
 
     ab.util.cutLeadingTrailingSlashes = function(path){
@@ -138,17 +140,23 @@ Appbase = {
     }
 
     ab.graph.init = function(){
+        ab.graph.storage = {};
 
         ab.graph.storage.get = function(what,key,extras){
 
             return new Promise(function(resolve,reject){
+
+
                 var cached = ab.caching.get(what,key);
+                cached = cached?cached:{};
 
                 switch(what){
                     case 'path_uuid':
                         if(cached.val){
                             resolve(cached.val);
                         } else {
+
+
                             /*TODO: fetch from server
                              amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
                              error && reject(error);
@@ -159,6 +167,8 @@ Appbase = {
                              amplify.unsubscribe(topic,listenerName);
                              })
                              */
+
+                            resolve(false); //for now, as server is not available
 
                         }
                         cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -179,6 +189,8 @@ Appbase = {
                              })
                              */
 
+                            resolve(false); //for now, as server is not available
+
                         }
                         cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
@@ -187,6 +199,10 @@ Appbase = {
 
                         ab.graph.storage.get('path_uuid',key)
                             .then(function(uuid){
+                                if(!uuid){
+                                    resolve(false);
+                                }
+
                                 if(!extras)
                                     var extras = {};
 
@@ -211,6 +227,8 @@ Appbase = {
                              amplify.unsubscribe(topic,listenerName);
                              })
                              */
+
+                            resolve(false); //for now, as server is not available
                         }
 
                         cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -219,6 +237,10 @@ Appbase = {
                     case 'path_edges':
                         ab.graph.storage.get('path_uuid',key)
                             .then(function(uuid){
+                                if(!uuid){
+                                    resolve(false);
+                                }
+
                                 if(!extras)
                                     var extras = {};
 
@@ -234,43 +256,48 @@ Appbase = {
             })
         }
 
-        ab.graph.storage.set = function(what,key,val,extras){
-            //promise
+        ab.graph.storage.set = function(what,key,val,extrasArgs){
 
-            switch(what){
-                case 'path_uuid':
-                    /*expected string*/
-                    if(typeof val != "string"){
-                        throw ('UUID must be a string');
-                    }
+            return new Promise(function(resolve,reject){
 
-                    ab.caching.set(what,key,val);
+                var extras = extrasArgs?extrasArgs:{};
 
-                    break;
+                switch(what){
+                    case 'path_uuid':
+                        /*expected string*/
+                        if(typeof val != "string"){
+                            reject ('UUID must be a string');
+                        }
 
-                case 'uuid_vertex':
+                        ab.caching.set(what,key,val);
 
-                    /*
-                     obj expected:
-                     {
+                        resolve();
+
+                        break;
+
+                    case 'uuid_vertex':
+
+                        /*
+                         obj expected:
+                         {
                          timestamp: blah,
                          properties: {
                          }
 
-                     }
-                     */
+                         }
+                         */
 
 
-                    if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                        throw ('Object not valid.');
-                    }
+                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                            reject ('Object not valid.');
+                        }
 
-                    var storeNow = function(){
+
                         var cached = ab.caching.get(what,key);
-                        var storedVertex = cached.val;
+                        var storedVertex = cached? cached.val:undefined;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
-                            return;
+                            reject('Object not valid.');
                         }
 
                         if(extras.patch && storedVertex){
@@ -289,179 +316,200 @@ Appbase = {
                         ab.caching.set(what,key,val);
                         //TODO:event
                         resolve();
-                    }
-
-                    if(extras.shouldExist){
-                        ab.graph.storage.get('uuid_vertex',key,extras)
-                        .then(function(storedVertex){
-                            if(storedVertex){
-                                storeNow();
-                            } else {
-                                reject("Vertex not found.")
-                            }
-
-                        },reject);
-                    } else {
-                        storeNow();
-                    }
 
 
-                    break;
+                        break;
 
 
-                case 'path_vertex':
-                     /*
-                     obj expected:
-                     {
-                        timestamp: blah,
-                        properties: {
-                        }
-
-                     }
-                     */
-
-                    if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                        throw ('Object not valid.');
-                    }
-
-
-                    if(!extras)
-                        var extras = {};
-
-                    extras.path = key;
-
-                    if(!val.uuid){
-
-                        ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                            ab.graph.storage.set('uuid_vertex',uuid,val,extras);
-                            resolve();
-                        },reject);
-
-                    } else {
-
-                        ab.graph.storage.set('path_uuid',key,val.uuid);
-                        ab.graph.storage.set('uuid_vertex',val.uuid,val,extras);
-
-                    }
-
-                    //TODO: fire
-                    break;
-
-                case 'uuid_edges':
-                    /*
-                     obj expected:
-                     {
-                         'linkName': {
-
-                             timestamp: 'yo',
-                             data: {
-                                 uuid: blah,
-                                 timestamp: blah,
-                                 properties: {
-                                 }
-                             }
+                    case 'path_vertex':
+                        /*
+                         obj expected:
+                         {
+                         timestamp: blah,
+                         properties: {
                          }
 
-                     }
-                     */
+                         }
+                         */
 
-                    var storeNow = function(){
-
-                        for(var edgeName in val){
-                            //validation
-
-                            if(val[edgeName] && val[edgeName].data){
-                                var path = extras.path+'/'+edgeName;
-                                var vertex = val[edgeName].data;
-
-                                ab.graph.storage.set('path_vertex',path,vertex);
-                                delete val[edgeName].data;
-                            }
-
+                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                            reject ('Object not valid.');
                         }
 
-                        var cached = ab.caching.get(what,key);
-                        var storedEdges = cached.val;
+                        extras.path = key;
 
-                        if(extras.patch && storedEdges){
+
+                        var storeNow = function(){
+
+                            if(!val.uuid){
+                                ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                                    ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
+                                },reject);
+
+                            } else {
+                                ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
+                                    ab.graph.storage.set('uuid_vertex',val.uuid,val,extras).then(resolve,reject);
+                                },reject);
+
+
+                            }
+                        }
+
+                        if(typeof extras.shouldExist != 'undefined' ){
+                            ab.graph.storage.get('path_vertex',key,extras)
+                                .then(function(storedVertex){
+
+                                    if(extras.shouldExist){
+                                        if(storedVertex){
+                                            storeNow();
+                                        }else {
+
+                                            reject("Vertex not found.")
+                                        }
+
+                                    } else {
+
+                                        if(storedVertex){
+
+                                            reject("Vertex already exists.")
+                                        }else {
+
+                                            storeNow();
+                                        }
+
+                                    }
+
+                                },reject);
+                        } else {
+                            storeNow();
+                        }
+
+
+
+                        //TODO: fire
+                        break;
+
+                    case 'uuid_edges':
+                        /*
+                         obj expected:
+                         {
+                         'linkName': {
+
+                         timestamp: 'yo',
+                         data: {
+                         uuid: blah,
+                         timestamp: blah,
+                         properties: {
+                         }
+                         }
+                         }
+
+                         }
+                         */
+
+                        var storeNow = function(){
+
                             for(var edgeName in val){
-                                //TODO: timestamps, server edge delete flag
-                                val[edgeName] == null? delete storedEdges[edgeName] : storedEdges[edgeName] = val[edgeName];
-                                //TODO:fire events
-                                //TODO: in edges
-                            }
+                                //validation
 
-                            val = storedEdges;
-                        }
+                                if(val[edgeName] && val[edgeName].data){
+                                    var path = extras.path+'/'+edgeName;
+                                    var vertex = val[edgeName].data;
 
-                        ab.caching.set(what,key,val);
-
-                        resolve();
-                    }
-
-                    if(extras.shouldExist){
-                        ab.graph.storage.get('uuid_vertex',key,extras)
-                            .then(function(storedVertex){
-                                if(storedVertex){
-                                    storeNow();
-                                } else {
-                                    reject("Vertex not found.")
+                                    ab.graph.storage.set('path_vertex',path,vertex);
+                                    delete val[edgeName].data;
                                 }
 
-                            },reject);
-                    } else {
-                        storeNow();
-                    }
+                            }
+
+                            var cached = ab.caching.get(what,key);
+                            var storedEdges = cached.val;
+
+                            if(extras.patch && storedEdges){
+                                for(var edgeName in val){
+                                    //TODO: timestamps, server edge delete flag
+                                    val[edgeName] == null? delete storedEdges[edgeName] : storedEdges[edgeName] = val[edgeName];
+                                    //TODO:fire events
+                                    //TODO: in edges
+                                }
+
+                                val = storedEdges;
+                            }
+
+                            ab.caching.set(what,key,val);
+
+                            resolve();
+                        }
+
+                        if(extras.shouldExist){
+                            ab.graph.storage.get('uuid_vertex',key,extras)
+                                .then(function(storedVertex){
+                                    if(storedVertex){
+                                        storeNow();
+                                    } else {
+                                        reject("Vertex not found.")
+                                    }
+
+                                },reject);
+                        } else {
+                            storeNow();
+                        }
 
 
-                    break;
+                        break;
 
-                case 'path_edges':
-                    /*
-                     obj expected:
+                    case 'path_edges':
+                        /*
+                         obj expected:
 
 
                          {
-                                'linkName': {
+                         'linkName': {
 
-                                     timestamp: 'yo',
-                                     data: {
-                                         uuid: blah,
-                                         timestamp: blah,
-                                         properties: {
-                                            }
-                                     }
-                                }
+                         timestamp: 'yo',
+                         data: {
+                         uuid: blah,
+                         timestamp: blah,
+                         properties: {
+                         }
+                         }
+                         }
 
                          }
 
-                     */
+                         */
 
-                    if(typeof val != "object"  || ! val.properties || typeof val.timestamp == 'undefined'){
-                        throw ('Object not valid.');
-                    }
+                        if(typeof val != "object"  || ! val.properties || typeof val.timestamp == 'undefined'){
+                            reject ('Object not valid.');
+                        }
 
-                    if(!extras)
-                        var extras = {};
+                        if(!extras)
+                            var extras = {};
 
-                    extras.path = key;
+                        extras.path = key;
 
-                    if(!val.uuid){
+                        if(!val.uuid){
 
-                        ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                            ab.graph.storage.set('uuid_edges',uuid,val,extras);
-                        });
+                            ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                                ab.graph.storage.set('uuid_edges',uuid,val,extras).then(resolve,reject);
+                            },reject);
 
-                    } else {
+                        } else {
 
-                        ab.graph.storage.set('path_uuid',key,val.uuid);
-                        ab.graph.storage.set('uuid_edges',val.uuid,val,extras);
+                            ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
+                                ab.graph.storage.set('uuid_edges',val.uuid,val,extras).then(resolve,reject);
+                            },reject);
 
-                    }
 
-                    break;
+                        }
 
-            }
+                        break;
+
+                    default :
+                        reject('What to set?');
+
+                }
+            })
         }
 
 
@@ -499,21 +547,12 @@ Appbase = {
             get:function(path){
                 return ab.graph.storage.get('path_vertex',path);
             },
-            set: function(path,vertex,localCallback){
-                if(localCallback){
-                    ab.graph.storage.set('path_vertex',path,vertex,{patch:true,isLocal:true})
-                    .then(function(){
-
-                        //server;
-                        //localCallback;
-
-                    },localCallback);
+            set: function(path,vertex,extras){
+                if(!extras)
+                    extras = {};
 
 
-                } else {
-                    //server data has changed
-                    ab.graph.storage.set('path_vertex',path,vertex);
-                }
+                return ab.graph.storage.set('path_vertex',path,vertex,extras)
             }
         };
 
@@ -615,20 +654,102 @@ Appbase = {
         }
     }
 
+    ab.interface.init = function(){
+        ab.interface.global = {};
+
+        ab.interface.global.create = function(collection,key,localCallback){
+            if(!key){
+              var key = ab.util.uuid(); //TODO: it should not contain numbers
+            }
+
+            //TODO: serverside creation of UUIDs for new objects
+            ab.graph.path_vertex.set(collection+'/'+key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true,shouldExist:false}).then(function(){
+
+                localCallback && localCallback(false);
+
+            },localCallback ? localCallback: function(error){
+                throw error;
+            });
+
+            return ab.interface.ref_obj('collection'+'/'+'key');
+        }
+
+        ab.interface.global.ref = ab.interface.ref_obj;
+
+        ab.interface.ref_obj = function(path,lite){
+
+            var priv = {};
+            var exports = {
+                properties:{},
+                named_edges:{},
+                ordered_edges:{}
+            };
+
+            priv.path = ab.util.cutLeadingTrailingSlashes(path);
+
+            exports.path = function(){
+                return priv.path;
+            }
+
+            exports.out = function(edgeName){
+                return ab.interface.ref_obj(priv.path + '/' +edgeName);
+            }
+
+            exports.in = function(){
+                return ab.interface.ref_obj(ab.util.cutBack(priv.path));
+            }
+
+            exports.properties.add = function(prop,val,localCallback){
+
+            }
+
+            exports.properties.commit = function(prop,apply,localCallback){
+
+            }
+
+            exports.properties.remove = function(prop,localCallback){
+
+            }
+
+            exports.destroy = function(localCallback){
+
+            }
+
+            exports.on = function(){
+
+            }
+
+            priv.on_properties = function(){
+
+            }
+
+            return exports;
+
+        }
+
+        Appbase.create = ab.interface.global.create;
+        Appbase.ref = ab.interface.global.ref;
+    }
+
+    ab.debug.init = function(){
+        if(!Appbase.debug){
+            delete Appbase.debug;
+            return;
+        }
+
+        Appbase.debug = {ab:ab};
+
+    }
+
 
     var main = function(){
         ab.network.init();
         ab.caching.init();
         ab.firing.init();
         ab.graph.init();
+        ab.interface.init();
+        ab.debug.init();
 
-        Appbase.get = function(uuid,callback){
-            return ab.firing.add(uuid,callback);
-        }
-
-        Appbase.set = function(uuid,obj){
-            ab.caching.set(uuid,obj);
-        }
     }
 
     main();

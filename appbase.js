@@ -735,7 +735,7 @@ Appbase = {
 
             this.linksOrdered.splice(oldIndex,1);
 
-        } else if(typeof order == 'undefined') {
+        } else if(typeof order == 'undefined'){
             var order = 0;
         }
 
@@ -828,7 +828,7 @@ Appbase = {
             return ab.util.pathToUuidPro(toHide._path);
         }
 
-        toHide.uuid = function(callback) {
+        toHide.uuid = function(callback){
             ab.util.pathToUuid(toHide._path,callback);
         }
 
@@ -997,8 +997,6 @@ Appbase = {
 
     //Exposing only a few functions
     Appbase.ref = function(arg,dontFetch){
-
-
         if (Appbase.debug && Appbase.debug.ignoreGlobals)
             return;
 
@@ -1006,8 +1004,6 @@ Appbase = {
     }
 
     Appbase.create = function(namespace,key){
-
-
         if(arguments.length >2){
             throw "Expected only two arguments: namespace and key";
             return;
