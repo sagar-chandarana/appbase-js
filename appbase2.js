@@ -265,7 +265,7 @@ Appbase = {
                 switch(what){
                     case 'path_uuid':
                         /*expected string*/
-                        if(typeof val != "string" && !extras.destroy){
+                        if(typeof val != "string"){
                             reject ('UUID must be a string');
                         }
 
@@ -289,8 +289,7 @@ Appbase = {
 
 
                         if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                            if(!extras.destroy)
-                                reject ('Object not valid.');
+                            reject ('Object not valid.');
                         }
 
 
@@ -298,8 +297,7 @@ Appbase = {
                         var storedVertex = cached? cached.val:undefined;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
-                            if(!extras.destroy)
-                                reject('Object not valid.');
+                            reject('Object not valid.');
                         }
 
                         if(extras.patch && storedVertex){
@@ -337,7 +335,7 @@ Appbase = {
                          }
                          */
 
-                        if((typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined') && (val != null)){
+                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
                             reject ('Object not valid.');
                         }
 
@@ -346,20 +344,10 @@ Appbase = {
 
                         var storeNow = function(){
 
-                            if(!val || !val.uuid){
+                            if(!val.uuid){
                                 ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                                    if(!val){
-                                        extras.uuid = uuid;
-                                    }
-                                    return ab.graph.storage.set('uuid_vertex',uuid,val,extras);
-
-                                }).then(function(){
-                                    if(!val)
-                                        return  ab.graph.storage.set('path_uuid',null);
-                                    else
-                                        return Promise.resolve();
-                                }).then(resolve,reject);
-
+                                    ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
+                                },reject);
 
                             } else {
                                 ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
@@ -719,12 +707,7 @@ Appbase = {
             }
 
             exports.destroy = function(localCallback){
-
-                ab.graph.path_vertex.set(priv.path,null,{destroy:true}).then(function(){
-                    localCallback && localCallback(false);
-                },localCallback ? localCallback: function(error){
-                    throw error;
-                });
+                //TODO:
             }
 
             exports.on = function(){
