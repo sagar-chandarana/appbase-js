@@ -26,7 +26,8 @@ Appbase = {
         caching:{},
         graph:{},
         interface:{},
-        debug:{}
+        debug:{},
+        errors:{}
     }
 
     ab.util.cutLeadingTrailingSlashes = function(path){
@@ -120,7 +121,7 @@ Appbase = {
                     ab.caching.inMemory[key] = fromPersistent;
                     return {val:Object.clone(fromPersistent),isFresh:false};
                 } else {
-                    {isFresh:false};
+                    return {isFresh:false};
                 }
             }
         }
@@ -148,7 +149,6 @@ Appbase = {
 
 
                 var cached = ab.caching.get(what,key);
-                cached = cached?cached:{};
 
                 switch(what){
                     case 'path_uuid':
@@ -168,7 +168,7 @@ Appbase = {
                              })
                              */
 
-                            resolve(false); //for now, as server is not available
+                            reject(ab.errors.vertex_not_found) //for now, as server is not available
 
                         }
                         cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -189,19 +189,16 @@ Appbase = {
                              })
                              */
 
-                            resolve(false); //for now, as server is not available
+                            reject(ab.errors.vertex_not_found); //for now, as server is not available
 
                         }
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
 
                     case 'path_vertex':
 
                         ab.graph.storage.get('path_uuid',key)
                             .then(function(uuid){
-                                if(!uuid){
-                                    resolve(false);
-                                }
 
                                 if(!extras)
                                     var extras = {};
@@ -228,10 +225,10 @@ Appbase = {
                              })
                              */
 
-                            resolve(false); //for now, as server is not available
+                            resolve([]); //for now, as server is not available and by reaching here, it is confirmed that the vertex exists but there are no edges - thus returning an empty array.
                         }
 
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
 
                     case 'path_edges':
@@ -263,6 +260,25 @@ Appbase = {
                 var extras = extrasArgs?extrasArgs:{};
 
                 switch(what){
+                    case 'uuid_path':
+                        /*expected string*/
+                        if(typeof val != "string"){
+                            reject('UUID must be a string');
+                        }
+
+                        var cached = ab.caching.get(what,key);
+
+                        if(!cached.val){
+                            cached.val = {};
+                        }
+
+                        cached.val[val] = true;
+
+                        ab.caching.set(what,key,cached.val);
+                        resolve();
+
+                        break;
+
                     case 'path_uuid':
                         /*expected string*/
                         if(typeof val != "string"){
@@ -270,8 +286,7 @@ Appbase = {
                         }
 
                         ab.caching.set(what,key,val);
-
-                        resolve();
+                        ab.graph.storage.set('uuid_path',val,key).then(resolve,reject);
 
                         break;
 
@@ -317,7 +332,9 @@ Appbase = {
                         val.prev && delete val.prev.prev; //delete older state
 
                         ab.caching.set(what,key,val);
-                        //TODO:event
+
+                        ab.firing.fire('properties',key,val);
+
                         resolve();
 
 
@@ -363,26 +380,20 @@ Appbase = {
                                 .then(function(storedVertex){
 
                                     if(extras.shouldExist){
-                                        if(storedVertex){
                                             storeNow();
-                                        }else {
-
-                                            reject("Vertex not found.")
-                                        }
-
-                                    } else {
-
-                                        if(storedVertex){
-
-                                            reject("Vertex already exists.")
-                                        }else {
-
-                                            storeNow();
-                                        }
-
                                     }
+                                    else {
+                                        reject("Vertex already exists.")
+                                    }
+                                },function(error){
 
-                                },reject);
+                                    if(!extras.shouldExist && error == ab.errors.vertex_not_found ){
+                                        storeNow();
+                                    }
+                                    else {
+                                        reject(error);
+                                    }
+                                });
                         } else {
                             storeNow();
                         }
@@ -602,26 +613,43 @@ Appbase = {
                 return ab.graph.storage.get('path_in_edge_paths',path);
             }
         };
+
+        ab.graph.uuid_paths = {
+            getSync:function(uuid){
+                var cached = ab.caching.get('uuid_path',uuid);
+                return cached.val?cached.val:{};
+            }
+        }
     }
 
     ab.firing.init = function(){
-        amplify.subscribe('fromCache:data_modified_by_server fromCache:data_modified_locally',function(uuid,obj){
-            //snapshot creation
-            amplify.publish('fire:'+uuid,obj);
-        });
 
-        ab.firing.add = function (uuid,callback){
-            ab.caching.get(uuid).then(function(cachedObj){
-                //snapshot creation
-                callback(cachedObj);
-            })
-
-            return amplify.subscribe('fire:'+uuid,callback);
+        ab.firing.fire = function(event,uuid,obj){
+            var paths = ab.graph.uuid_paths.getSync(uuid);
+            for(var path in paths){
+                  amplify.publish(event+':'+path,false,Appbase.ref(path,true),obj.properties); //TODO: snapshot, reference and stuff
+            };
         }
 
-        ab.firing.remove = function(uuid,listenerName){
-            return amplify.unsubscribe('fire:'+uuid,listenerName);
+        ab.firing.properties = {};
+        ab.firing.properties.on = function(path,name,callback){
+            var listenerName = amplify.subscribe('properties:'+path,name,callback);
+
+            ab.graph.path_vertex.get(path)
+            .then(function(vertex){
+                callback(false,Appbase.ref(path,true),vertex.properties); //todo: snapshot object
+
+            },function(error){
+                amplify.unsubscribe('properties:'+path,listenerName);
+                callback(error);
+            });
+
         }
+
+        ab.firing.properties.off = function(path,name){
+            return amplify.unsubscribe('properties:'+path,name); // todo: stop listening, clear from RAM
+        }
+
     }
 
     ab.interface.init = function(){
@@ -679,12 +707,12 @@ Appbase = {
                 //TODO:
             }
 
-            exports.on = function(){
-
+            exports.properties.on = function(name,callback){
+                return ab.firing.properties.on(priv.path,name,callback);
             }
 
-            priv.on_properties = function(){
-
+            exports.properties.off = function(name){
+                return ab.firing.properties.off(priv.path,name);
             }
 
             return exports;
@@ -726,6 +754,10 @@ Appbase = {
 
     }
 
+    ab.errors.init = function(){
+        ab.errors.vertex_not_found = "Vertex not found."
+        ab.errors.vertex_exists = "Vertex already exists."
+    }
 
     var main = function(){
         ab.network.init();
@@ -734,6 +766,7 @@ Appbase = {
         ab.graph.init();
         ab.interface.init();
         ab.debug.init();
+        ab.errors.init();
 
     }
 

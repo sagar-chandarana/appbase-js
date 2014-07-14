@@ -24,6 +24,7 @@ var amplify = global.amplify = {
 		if ( typeof topic !== "string" ) {
 			throw new Error( "You must provide a valid topic to publish." );
 		}
+
         console.log(arguments);
 
 		var args = slice.call( arguments, 1 ),
@@ -47,6 +48,14 @@ var amplify = global.amplify = {
 		}
 		return ret !== false;
 	},
+
+    subscriptionCount: function(topic){
+        if ( !subscriptions[ topic ] ) {
+            return 0;
+        } else {
+            return subscriptions[ topic ].length;
+        }
+    },
 
 	subscribe: function( topic, name, callback, priority ) {
 		if ( typeof topic !== "string" ) {

@@ -111,7 +111,8 @@ if(debugMode){
 
     });
 
-    QUnit.test('Appbase.ref',function(assert){
+    QUnit.module('DEBUG ON: Appbase Ref');
+    QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
         var path = 'lol/yello';
         var abRef = Appbase.ref(path);
 
@@ -153,6 +154,38 @@ if(debugMode){
         });
 
     });
+
+
+
+    QUnit.test('properties.on',function(assert){
+        expect(3);
+
+        var abRef = Appbase.create('lala');
+
+        var prop = 'abc';
+        var value = 'pqr';
+        var prop1 = 'lol';
+        var val1 = 'lala';
+
+
+        var listener1 = 'popu';
+
+        abRef.properties.on(listener1,function(error,ref,snap){
+            console.log(error);
+            assert.equal(ref.path(), abRef.path(),'Reference');
+
+        });
+
+        abRef.properties.add(prop,value);
+
+        abRef.properties.add(prop1,val1);
+
+        abRef.properties.off(listener1);
+
+        abRef.properties.remove(prop);
+
+    });
+
 
     /*
 
