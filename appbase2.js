@@ -171,7 +171,7 @@ Appbase = {
                             reject(ab.errors.vertex_not_found) //for now, as server is not available
 
                         }
-                        cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        //todo: cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
 
                     case 'uuid_vertex':
@@ -432,7 +432,7 @@ Appbase = {
                                 for(var edgeName in val){
                                     //TODO: timestamps, server edge delete flag
                                     if(storedEdges[edgeName] && val[edgeName] == null){ //TODo: (val[edgeName] == null || timestamp comparision)
-                                        toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName)]);
+                                        toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]);
                                         //todo: remove path_uuid for edge
                                         //todo: in edge for edge uuid
                                         delete storedEdges[edgeName];
@@ -451,15 +451,12 @@ Appbase = {
                                     ab.graph.storage.set('path_vertex',path,vertex);
                                 }
 
-                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName)]);
+                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]);
 
                                 delete val[edgeName].data;
 
                                 if(extras.patch && storedEdges)
                                     storedEdges[edgeName] = val[edgeName];
-
-
-
                                 //TODO: in edges
                             }
 
@@ -554,8 +551,7 @@ Appbase = {
             },
             getSync: function(path){
                 return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val) : undefined;
-            }
-            ,
+            },
             set: function(path,vertex,extras){
                 if(!extras)
                     extras = {};
@@ -572,70 +568,46 @@ Appbase = {
                 return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val) : {};
             },
             set: function(path,edges,extras){
-                var localCallback = extras.isLocal? extras.localCallback:false;
-
-                if(localCallback){
-                    /*
-                    expected when local
-                    edges: {
-                        'edgeName':path
-                    } - only one edge
-                     */
-                    if(edges.length >1){
-                        throw ('Only one edge should be added  at once, locally')
-                        return;
-                    }
-
-                    var edgeName = edges.keys()[0];
-                    var edgePath = edges[edgeName];
-
-                    if(edgePath){
-                        ab.graph.path_vertex.get(edgePath).then(
-                            function(edgeVertex){
-                                if(edgeVertex){
-
-                                    edges[edgeName] = {
-                                        timestamp: null
-                                    };
-
-                                    storeEdges().then(handleServer);
-                                } else {
-                                    localCallback("Vertex not found.")
-                                }
-
-
-                            },function(error){
-                                localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
-                            }
-                        );
-                    } else {
-                        storeEdges().then(handleServer);
-                    }
-
-                    var handleServer = function(){
-                        //TODO: server, localCallback
-                    };
-
-
-                } else {
-                    //server data has changed
-                    storeEdges();
-                }
-
-                var storeEdges = function(){
-                    ab.graph.storage.set('path_edges',path,edges,localCallback?{isLocal:true,shouldExist:true,patch:true}:extras).then(
-                        function(){
-
-                           //TODO: server, localCallback
-                        },
-                        function(error){
-                            localCallback(error); //TODO: what kind of error it would be? should there be a retry? Possible case: the vertex wasn't in the cache and network is also gone
+                return new Promise(function(resolve,reject){
+                    if(extras.isLocal){
+                        /*
+                         expected when local
+                         edges: {
+                         'edgeName':path
+                         } - only one edge
+                         */
+                        if(edges.length >1){
+                            reject('Only one edge should be added  at once, locally');
+                            return;
                         }
-                    )
-                }
 
+                        var edgeName = edges.keys()[0];
+                        var edgePath = edges[edgeName];
+
+                        var handleServer = function(){
+                            resolve();
+                            //TODO: server, resolve,reject, timestamping
+                        };
+
+                        if(edgePath){
+                            ab.graph.path_vertex.get(edgePath)
+                            .then(function(edgeVertex){
+                                edges[edgeName] = {
+                                    //timestamp: null
+                                };
+
+                                ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                            },reject);
+                        } else { //deletion
+                            ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                        }
+
+                    } else { //server data has changed
+                        ab.graph.storage.set('path_edges',path,edges,extras).then(resolve,reject);
+                    }
+                });
             }
-        };
+        }
 
         ab.graph.path_in_edge_paths = {
             get:function(path){
@@ -667,10 +639,31 @@ Appbase = {
             return exports;
         }
 
-        ab.firing.fire = function(event,uuid,vertex,extras){ // TODO: different preparation for different events
+        ab.firing.fire = function(event,uuid,vertex,extras){
+            var ref;
+
             var paths = ab.graph.uuid_paths.getSync(uuid);
             for(var path in paths){
-                  amplify.publish(event+':'+path,false,Appbase.ref(path,true),ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
+
+                switch(event){
+
+                    case "properties":
+                        ref  = Appbase.ref(path,true);
+                        break;
+
+                    case "edge_added":
+                    case "edge_removed":
+                    case "edge_changed":
+                    case "edge_moved":
+                        ref  = Appbase.ref(path+'/'+extras.edgeName,true);
+                        break;
+
+                    default:
+                        throw ('Wrong event.');
+
+                }
+
+                amplify.publish(event+':'+path,false,ref,ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
             };
         }
 
@@ -732,7 +725,7 @@ Appbase = {
                             }
                         }
 
-                        //listen for new edges
+                        //listen for new edges - this doesn't work
                         ab.graph.path_out_edges.get(path); //TODO: cache will be considered fresh in this call, need a better mechanism for managing listeners.
                     } else if (event == 'edge_changed'){
                         //todo: think: need anything special?
@@ -742,9 +735,6 @@ Appbase = {
                 amplify.unsubscribe(event+':'+path,listenerName);
                 callback(error);
             });
-
-
-
         }
 
     }
@@ -804,12 +794,16 @@ Appbase = {
                 //TODO:
             }
 
-            exports.named_edges.add = function(){
-
+            exports.named_edges.add = function(edgeName,ref,callback){
+                ab.graph.path_out_edges.set(priv.path,{edgeName:ref.path()},{isLocal:true,patch:true,shouldExist:true}).then(function(){
+                    callback(false);
+                },callback);
             }
 
-            exports.named_edges.remove = function(){
-
+            exports.named_edges.remove = function(edgeName,callback){
+                ab.graph.path_out_edges.set(priv.path,{edgeName:null},{isLocal:true,patch:true,shouldExist:true}).then(function(){
+                    callback(false);
+                },callback);
             }
 
             exports.properties.on = function(name,callback){

@@ -114,8 +114,14 @@ if(debugMode){
         })
     });
 
-    QUnit.module('DEBUG ON: Appbase Ref');
-    /*QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
+    QUnit.module('DEBUG ON: Appbase Ref', {
+        setup: function() {
+        },
+        teardown: function() {
+        }
+    });
+
+    QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
         var path = 'lol/yello';
         var abRef = Appbase.ref(path);
 
@@ -158,7 +164,6 @@ if(debugMode){
 
     });
 
-*/
 
     QUnit.test('properties.on',function(assert){
         expect(12); //this is imp
