@@ -328,15 +328,15 @@ Appbase = {
 
 
                         //todo: preserve server's version, with a timestamp
-                        val.prev = ab.caching.get(what,key)? ab.caching.get(what,key).val:undefined;
+                        val.prev = ab.caching.get(what,key).val;
                         val.prev && delete val.prev.prev; //delete older state
 
                         ab.caching.set(what,key,val);
 
-                        ab.firing.fire('properties',key,val);
-
                         resolve();
 
+
+                        val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
 
                         break;
 
@@ -423,18 +423,7 @@ Appbase = {
 
                         var storeNow = function(){
 
-                            for(var edgeName in val){
-                                //validation
-
-                                if(val[edgeName] && val[edgeName].data){
-                                    var path = extras.path+'/'+edgeName;
-                                    var vertex = val[edgeName].data;
-
-                                    ab.graph.storage.set('path_vertex',path,vertex);
-                                    delete val[edgeName].data;
-                                }
-
-                            }
+                            var toBeFired = [];
 
                             var cached = ab.caching.get(what,key);
                             var storedEdges = cached.val;
@@ -442,17 +431,50 @@ Appbase = {
                             if(extras.patch && storedEdges){
                                 for(var edgeName in val){
                                     //TODO: timestamps, server edge delete flag
-                                    val[edgeName] == null? delete storedEdges[edgeName] : storedEdges[edgeName] = val[edgeName];
-                                    //TODO:fire events
-                                    //TODO: in edges
+                                    if(storedEdges[edgeName] && val[edgeName] == null){ //TODo: (val[edgeName] == null || timestamp comparision)
+                                        toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName)]);
+                                        //todo: remove path_uuid for edge
+                                        //todo: in edge for edge uuid
+                                        delete storedEdges[edgeName];
+
+                                    }
+
+                                }
+                            }
+
+                            if(val[edgeName]) {
+
+                                if(val[edgeName].data){
+                                    var path = extras.path+'/'+edgeName;
+                                    var vertex = val[edgeName].data;
+
+                                    ab.graph.storage.set('path_vertex',path,vertex);
                                 }
 
-                                val = storedEdges;
+                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName)]);
+
+                                delete val[edgeName].data;
+
+                                if(extras.patch && storedEdges)
+                                    storedEdges[edgeName] = val[edgeName];
+
+
+
+                                //TODO: in edges
                             }
+
+                            if(extras.patch && storedEdges)
+                                val = storedEdges;
 
                             ab.caching.set(what,key,val);
 
+
                             resolve();
+
+                            toBeFired.forEach(function(args){
+                                ab.firing.fire.apply(null,args);
+                            });
+
                         }
 
                         if(extras.shouldExist){
@@ -530,6 +552,10 @@ Appbase = {
             get:function(path){
                 return ab.graph.storage.get('path_vertex',path);
             },
+            getSync: function(path){
+                return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val) : undefined;
+            }
+            ,
             set: function(path,vertex,extras){
                 if(!extras)
                     extras = {};
@@ -541,6 +567,9 @@ Appbase = {
         ab.graph.path_out_edges = {
             get:function(path){
                 return ab.graph.storage.get('path_edges',path);
+            },
+            getSync: function(path){
+                return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val) : {};
             },
             set: function(path,edges,extras){
                 var localCallback = extras.isLocal? extras.localCallback:false;
@@ -638,7 +667,7 @@ Appbase = {
             return exports;
         }
 
-        ab.firing.fire = function(event,uuid,vertex,extras){
+        ab.firing.fire = function(event,uuid,vertex,extras){ // TODO: different preparation for different events
             var paths = ab.graph.uuid_paths.getSync(uuid);
             for(var path in paths){
                   amplify.publish(event+':'+path,false,Appbase.ref(path,true),ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
@@ -662,6 +691,60 @@ Appbase = {
 
         ab.firing.properties.off = function(path,name){
             return amplify.unsubscribe('properties:'+path,name); // todo: stop listening, clear from RAM
+        }
+
+        ab.firing.named_edges = {};
+
+        ab.firing.named_edges.on = function(event,path,name,noData,callback){
+            //todo: check event
+            if(arguments.length == 3 && typeof name == "function"){
+                var callback = name;
+                name = undefined;
+            } else if(arguments.length == 4 && typeof noData == "function" && typeof name == "string"){
+                var callback = noData;
+                noData = undefined;
+            } else if(arguments.length == 4 && typeof noData == "function" && typeof name == "boolean") {
+                var callback = noData;
+                noData = name;
+                name = undefined;
+            } else {
+                throw "Invalid arguments."
+            }
+
+            var listenerName = amplify.subscribe(event+':'+path,name,callback);
+
+            ab.graph.path_vertex.get(path)
+            .then(function(vertex){
+                    if(event == "edge_added"){
+                        //fire for existing edges
+                        var edges = ab.graph.path_out_edges.getSync(path);
+                        for(var edgeName in edges){
+                            fireClosure(path+'/'+edgeName);
+                        }
+
+                        var fireClosure = function(edgePath){
+                            if(noData){
+                                callback(false,Appbase.ref(edgePath,true));
+                            } else {
+                                ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                    callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
+                                },callback);
+                            }
+                        }
+
+                        //listen for new edges
+                        ab.graph.path_out_edges.get(path); //TODO: cache will be considered fresh in this call, need a better mechanism for managing listeners.
+                    } else if (event == 'edge_changed'){
+                        //todo: think: need anything special?
+                    }
+
+            },function(error){
+                amplify.unsubscribe(event+':'+path,listenerName);
+                callback(error);
+            });
+
+
+
         }
 
     }
@@ -719,6 +802,14 @@ Appbase = {
 
             exports.destroy = function(localCallback){
                 //TODO:
+            }
+
+            exports.named_edges.add = function(){
+
+            }
+
+            exports.named_edges.remove = function(){
+
             }
 
             exports.properties.on = function(name,callback){
