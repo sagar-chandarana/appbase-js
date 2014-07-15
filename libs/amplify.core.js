@@ -25,7 +25,7 @@ var amplify = global.amplify = {
 			throw new Error( "You must provide a valid topic to publish." );
 		}
 
-        console.log(arguments);
+        //console.log(arguments);
 
 		var args = slice.call( arguments, 1 ),
 			topicSubscriptions,

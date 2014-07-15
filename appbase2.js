@@ -624,10 +624,24 @@ Appbase = {
 
     ab.firing.init = function(){
 
-        ab.firing.fire = function(event,uuid,obj){
+        ab.firing.snapshot = function(vertex){
+            var exports = {};
+
+            exports.properties = function(){
+                return vertex.properties;
+            }
+
+            exports.prevProperties = function(){
+                return vertex.prev?vertex.prev.properties:null;
+            }
+
+            return exports;
+        }
+
+        ab.firing.fire = function(event,uuid,vertex,extras){
             var paths = ab.graph.uuid_paths.getSync(uuid);
             for(var path in paths){
-                  amplify.publish(event+':'+path,false,Appbase.ref(path,true),obj.properties); //TODO: snapshot, reference and stuff
+                  amplify.publish(event+':'+path,false,Appbase.ref(path,true),ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
             };
         }
 
@@ -637,7 +651,7 @@ Appbase = {
 
             ab.graph.path_vertex.get(path)
             .then(function(vertex){
-                callback(false,Appbase.ref(path,true),vertex.properties); //todo: snapshot object
+                callback(false,Appbase.ref(path,true),ab.firing.snapshot(vertex));
 
             },function(error){
                 amplify.unsubscribe('properties:'+path,listenerName);
@@ -722,6 +736,11 @@ Appbase = {
         ab.interface.global = {};
 
         ab.interface.global.create = function(collection,key,localCallback){
+            if(typeof key == 'function'){
+                var localCallback = key;
+                key = undefined;
+            }
+
             if(!key){
               var key = ab.util.uuid(); //TODO: it should not contain numbers
             }
@@ -735,7 +754,7 @@ Appbase = {
                 throw error;
             });
 
-            return ab.interface.ref_obj('collection'+'/'+'key');
+            return ab.interface.ref_obj(collection+'/'+key);
         }
 
         ab.interface.global.ref = ab.interface.ref_obj;

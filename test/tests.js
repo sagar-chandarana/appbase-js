@@ -109,10 +109,13 @@ if(debugMode){
 
         });
 
+        Appbase.create('lol',function(error){
+            assert.ok(!error,'No error for a new object with no given key');
+        })
     });
 
     QUnit.module('DEBUG ON: Appbase Ref');
-    QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
+    /*QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
         var path = 'lol/yello';
         var abRef = Appbase.ref(path);
 
@@ -155,10 +158,10 @@ if(debugMode){
 
     });
 
-
+*/
 
     QUnit.test('properties.on',function(assert){
-        expect(3);
+        expect(12); //this is imp
 
         var abRef = Appbase.create('lala');
 
@@ -167,23 +170,33 @@ if(debugMode){
         var prop1 = 'lol';
         var val1 = 'lala';
 
-
         var listener1 = 'popu';
 
-        abRef.properties.on(listener1,function(error,ref,snap){
-            console.log(error);
-            assert.equal(ref.path(), abRef.path(),'Reference');
+        var props = {}; //for a new object
+        var prevProps = null;  //for a new object
 
+        abRef.properties.on(listener1,function(error,ref,snap){
+            assert.equal(ref.path(), abRef.path(),'Reference');
+            assert.deepEqual(snap.properties(),props,'snap - Props');
+            assert.deepEqual(snap.prevProperties(),prevProps,'snap - PrevProps');
         });
 
+
+        prevProps = {};
+        props[prop] = value;
         abRef.properties.add(prop,value);
 
+        prevProps = Object.clone(props);
+        props[prop1] = val1;
         abRef.properties.add(prop1,val1);
 
-        abRef.properties.off(listener1);
-
+        prevProps = Object.clone(props);
+        delete props[prop];
         abRef.properties.remove(prop);
 
+        abRef.properties.off(listener1); //should not fire now
+
+        abRef.properties.remove(prop1);
     });
 
 
