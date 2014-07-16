@@ -211,21 +211,12 @@ Appbase = {
                         break;
 
                     case 'uuid_edges':
+                        /*TODO: fetch from server, according to timestamp, startAT, endAt and then return data from cache */
+
                         if(cached.val){
                             resolve(cached.val);
                         } else {
-                            /*TODO: fetch from server, according to timestamp
-                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                             error && reject(error);
-
-                             obj && resolve(ab.caching.inMemory[uuid]);
-                             !obj && resolve(false);
-
-                             amplify.unsubscribe(topic,listenerName);
-                             })
-                             */
-
-                            resolve([]); //for now, as server is not available and by reaching here, it is confirmed that the vertex exists but there are no edges - thus returning an empty array.
+                            resolve ({byName:{},byPriority:{}}); //empty object, as server is not available, and the assumption is path_uuid exists, but there are no edges for this uuid.
                         }
 
                         //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -408,7 +399,7 @@ Appbase = {
                          obj expected:
                          {
                          'linkName': {
-
+                         priority: 0,
                          timestamp: 'yo',
                          data: {
                          uuid: blah,
@@ -426,23 +417,96 @@ Appbase = {
                             var toBeFired = [];
 
                             var cached = ab.caching.get(what,key);
-                            var storedEdges = cached.val;
+                            var storedByName = cached.val? cached.val.byName:null;
+                            var storedByPriority = cached.val?cached.val.byPriority:{};
+                            var lowestPriority = cached.val? cached.val.lowestPriority:+Infinity;
+                            var highestPriority = cached.val? cached.val.highestPriority:-Infinity;
 
-                            if(extras.patch && storedEdges){
-                                for(var edgeName in val){
-                                    //TODO: timestamps, server edge delete flag
-                                    if(storedEdges[edgeName] && val[edgeName] == null){ //TODo: (val[edgeName] == null || timestamp comparision)
-                                        toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]);
-                                        //todo: remove path_uuid for edge
-                                        //todo: in edge for edge uuid
-                                        delete storedEdges[edgeName];
+                            var setHighLow = function(prio){
+                                if(prio > highestPriority){
+                                    highestPriority = prio;
+                                }
 
-                                    }
-
+                                if(prio < lowestPriority){
+                                    lowestPriority = prio;
                                 }
                             }
 
-                            if(val[edgeName]) {
+                            /*
+                            format:
+                            {
+                                byName: {
+                                    'linkName': {
+                                        priority: 0,
+                                        timestamp: 'yo'
+                                    }
+                                }
+
+                                byPriority: {
+                                    prio: [sorted names]
+                                }
+                            }
+                            */
+
+
+                            if(extras.patch && storedByName){
+                                for(var edgeName in val){
+                                    //TODO: timestamps, if no priority given in the local, timestamp is the priority
+                                    if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
+                                        if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority ){ //todo: 1)server delete flag 2)//todo: check for uuids
+                                            //remove edge
+
+                                            toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: vertex
+
+                                            //todo: remove path_uuid for edge
+                                            //todo: in edge for edge uuid
+
+                                            var priority = storedByName[edgeName].priority;
+                                            storedByPriority[priority].splice(storedByPriority[priority].indexOf(edgeName),1);
+                                            delete storedByName[edgeName];
+
+                                        } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
+
+                                            toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: 1) vertex 2) attach priority data
+
+                                            var oldPriority = storedByName[edgeName].priority;
+                                            storedByPriority[oldPriority].splice(storedByPriority[oldPriority].indexOf(edgeName),1);
+
+                                            var newPriority = val[edgeName].priority;
+                                            if(!storedByPriority[newPriority]){
+                                                storedByPriority[newPriority] = [];
+                                            }
+
+                                            storedByPriority[newPriority].push(edgeName);
+                                            storedByPriority[newPriority].sort();
+
+                                            setHighLow(newPriority);
+
+                                            if(oldPriority == lowestPriority){
+                                                lowestPriority = +Infinity;
+                                            }
+
+                                            if(oldPriority == highestPriority ){
+                                                highestPriority= -Infinity;
+                                            }
+
+
+                                            delete val[edgeName];
+
+                                        } else {
+                                            //it should not end up here
+                                            reject('Edge data wrong');
+                                        }
+                                    }
+
+                                }
+
+                                // the only edges left are newly added
+                            }
+
+                            for(var edgeName in val){
+                                if(!val[edgeName]) // todo: server delete flag
+                                    continue;
 
                                 if(val[edgeName].data){
                                     var path = extras.path+'/'+edgeName;
@@ -455,15 +519,34 @@ Appbase = {
 
                                 delete val[edgeName].data;
 
-                                if(extras.patch && storedEdges)
-                                    storedEdges[edgeName] = val[edgeName];
+                                if(extras.patch && storedByName)
+                                    storedByName[edgeName] = val[edgeName];
+
+                                if(!storedByPriority[val[edgeName].priority]){
+                                    storedByPriority[val[edgeName].priority] = [];
+                                }
+
+                                storedByPriority[val[edgeName].priority].push(edgeName);
+                                storedByPriority[val[edgeName].priority].sort();
+
+
+                                setHighLow(val[edgeName].priority);
+
                                 //TODO: in edges
                             }
 
-                            if(extras.patch && storedEdges)
-                                val = storedEdges;
+                            if(lowestPriority == +Infinity || highestPriority == -Infinity){
+                                for(var prio in storedByPriority){
+                                    setHighLow(prio);
+                                }
+                            }
 
-                            ab.caching.set(what,key,val);
+                            ab.caching.set(what,key,{
+                                byName: (extras.patch && storedByName)?storedByName:val,
+                                byPriority: storedByPriority,
+                                lowestPriority:lowestPriority,
+                                highestPriority:highestPriority
+                            });
 
 
                             resolve();
@@ -688,17 +771,17 @@ Appbase = {
 
         ab.firing.named_edges = {};
 
-        ab.firing.named_edges.on = function(event,path,name,noData,callback){
+        ab.firing.named_edges.on = function(event,path,name,options,callback){
             //todo: check event
             if(arguments.length == 3 && typeof name == "function"){
                 var callback = name;
                 name = undefined;
-            } else if(arguments.length == 4 && typeof noData == "function" && typeof name == "string"){
-                var callback = noData;
-                noData = undefined;
-            } else if(arguments.length == 4 && typeof noData == "function" && typeof name == "boolean") {
-                var callback = noData;
-                noData = name;
+            } else if(arguments.length == 4 && typeof options == "function" && typeof name == "string"){
+                var callback = options;
+                options = undefined;
+            } else if(arguments.length == 4 && typeof options == "function" && typeof name == "object") {
+                var callback = options;
+                options = name;
                 name = undefined;
             } else {
                 throw "Invalid arguments."
@@ -706,27 +789,34 @@ Appbase = {
 
             var listenerName = amplify.subscribe(event+':'+path,name,callback);
 
-            ab.graph.path_vertex.get(path)
-            .then(function(vertex){
+            ab.graph.path_out_edges.get(path)  //TODO: provide startAt,endAt
+            .then(function(edges){
                     if(event == "edge_added"){
                         //fire for existing edges
-                        var edges = ab.graph.path_out_edges.getSync(path);
-                        for(var edgeName in edges){
-                            fireClosure(path+'/'+edgeName);
-                        }
 
-                        var fireClosure = function(edgePath){
-                            if(noData){
-                                callback(false,Appbase.ref(edgePath,true));
-                            } else {
-                                ab.graph.path_vertex.get(edgePath).then(function(vertex){
-                                    callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
-                                },callback);
+                        var startAt = typeof options.startAt == 'number'? options.startAt:edges.lowestPriority; //todo: how to get the least priority?
+                        var endAt = typeof options.endAt == 'number'? options.startAt:edges.highestPriority; //todo: how to get the least priority?
+
+                        //todo: reverse, skip
+
+                        for(var i=startAt; i<= endAt;i++){ //todo: endAt inclusive or exlusive, for exlusive, endAt at max prio doesnt work
+                            if(edges.byPriority[i]){
+
+                                edges.byPriority[i].forEach(function(edgeName){
+                                    var edgePath = path+edgeName;
+
+                                    if(options && options.noData){
+                                        callback(false,Appbase.ref(edgePath,true));
+                                    } else {
+                                        ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                            callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
+                                        },callback);
+                                    }
+                                })
                             }
                         }
 
-                        //listen for new edges - this doesn't work
-                        ab.graph.path_out_edges.get(path); //TODO: cache will be considered fresh in this call, need a better mechanism for managing listeners.
+
                     } else if (event == 'edge_changed'){
                         //todo: think: need anything special?
                     }
