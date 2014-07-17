@@ -799,7 +799,7 @@ Appbase = {
 
                         //todo: reverse, skip
 
-                        for(var i=startAt; i<= endAt;i++){ //todo: endAt inclusive or exlusive, if exlusive, endAt at max prio doesnt work
+                        for(var i=startAt; (i<= endAt) && startAt != +Infinity && endAt!= -Infinity ;i++){ //todo: endAt inclusive or exlusive, if exlusive, endAt at max prio doesnt work
                             if(edges.byPriority[i]){
 
                                 edges.byPriority[i].forEach(function(edgeName){
@@ -883,15 +883,15 @@ Appbase = {
                 //TODO:
             }
 
-            exports.edges.add = function(edgeName,ref,callback){
+            exports.edges.add = function(ref,options,callback){
                 ab.graph.path_out_edges.set(priv.path,{edgeName:ref.path()},{isLocal:true,patch:true,shouldExist:true}).then(function(){
-                    callback(false);
+                    callback(false); //todo: ref and snap
                 },callback);
             }
 
             exports.edges.remove = function(edgeName,callback){
                 ab.graph.path_out_edges.set(priv.path,{edgeName:null},{isLocal:true,patch:true,shouldExist:true}).then(function(){
-                    callback(false);
+                    callback(false);// todo: ref and snap
                 },callback);
             }
 

@@ -205,6 +205,119 @@ if(debugMode){
     });
 
 
+    QUnit.test('edges.add, edges.remove',function(assert){
+        var path = 'lol/yello';
+        var abRef = Appbase.ref(path);
+
+        var edgeRef1 = Appbase.create('yoEdge1');
+        var edgeName1 = 'haha1';
+        var priority1 = -500; //lowest
+
+        var edgeRef2 = Appbase.create('yoEdge2');
+        var edgeName2 = undefined; //uuid be will the name
+        var priority2 = 100;// highest when inserted
+
+        var edgeRef3 = Appbase.create('yoEdge3');
+        var edgeName3 = 'haha3';
+        var priority3 = undefined; // timestamp // highest
+
+
+
+        abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
+            assert.ok(error,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+                assert.ok(edges.byName[edgeName1] && edges.byName[edgeName1].priority==priority1,'edge1-byName object');
+                assert.ok(edges.byPriority[priority1].indexOf(edgeName1) > -1,'edge1-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge1-lowestPrio');
+                assert.equal(edges.highestPriority,priority1,'edge1-higestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.edges.add({ref:edgeRef2, name:edgeName2,priority:priority2},function(error){
+            assert.ok(error,'no error');
+            Promise.all([Appbase.debug.ab.graph.storage.get('path_uuid',edgeRef2.path()),Appbase.debug.ab.graph.storage.get('path_edges',path)]).then(function(array){
+                edgeName2 = array[0];
+                var edges = array[1];
+
+                assert.ok(edges.byName[edgeName2] && edges.byName[edgeName2].priority==priority2,'edge2-byName object');
+                assert.ok(edges.byPriority[priority2].indexOf(edgeName2) > -1,'edge2-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge2-lowestPrio');
+                assert.equal(edges.highestPriority,priority2,'edge2-higestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.edges.add({ref:edgeRef3, name:edgeName3,priority:priority3},function(error){
+            assert.ok(error,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(edges.byName[edgeName3] && edges.byName[edgeName3].priority,'edge3-byName object');
+
+                priority3 = edges.byName[edgeName3].priority;
+
+                assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge3-lowestPrio');
+                assert.equal(edges.highestPriority,priority3,'edge3-highestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.edges.remove({name:edgeName3},function(error){
+            assert.ok(error,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(!edges.byName[edgeName3],'edge3-removed-byName object');
+
+                assert.ok(edges.byPriority[priority3].indexOf(edgeName3) == -1,'edge3-removed-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge3-removed-lowestPrio');
+                assert.equal(edges.highestPriority,priority2,'edge3-removed-highestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.edges.remove({ref:edgeRef2},function(error){
+            assert.ok(error,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(!edges.byName[edgeName2],'edge2-removed-byName object');
+
+                assert.ok(edges.byPriority[priority2].indexOf(edgeName2) == -1,'edge2-removed-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge2-removed-lowestPrio');
+                assert.equal(edges.highestPriority,priority1,'edge2-removed-highestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+        abRef.edges.remove({name:edgeName1},function(error){
+            assert.ok(error,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(!edges.byName[edgeName1],'edge1-removed-byName object');
+
+                assert.ok(edges.byPriority[priority1].indexOf(edgeName1) == -1,'edge1-removed-byPriority object');
+                assert.equal(edges.lowestPriority,+Infinity,'edge1-removed-lowestPrio');
+                assert.equal(edges.highestPriority,-Infinity,'edge1-removed-highestPrio');
+
+            },function(error){
+                assert.ok(!error);
+            });
+        });
+
+
+    });
+
+
     /*
 
     QUnit.module('DEBUG ON: AppbaseObj',{
