@@ -206,6 +206,7 @@ if(debugMode){
 
 
     QUnit.test('edges.add, edges.remove',function(assert){
+        expect(24);
         var path = 'lol/yello';
         var abRef = Appbase.ref(path);
 
@@ -226,6 +227,7 @@ if(debugMode){
         abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
             assert.ok(error,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
                 assert.ok(edges.byName[edgeName1] && edges.byName[edgeName1].priority==priority1,'edge1-byName object');
                 assert.ok(edges.byPriority[priority1].indexOf(edgeName1) > -1,'edge1-byPriority object');
                 assert.equal(edges.lowestPriority,priority1,'edge1-lowestPrio');

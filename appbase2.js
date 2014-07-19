@@ -69,6 +69,10 @@ Appbase = {
         });
     }
 
+    ab.util.timestamp = function(){
+        return (new Date()).getTime();
+    }
+
     ab.network.init = function() {
         ab.network.server = 'http://162.242.213.228:3000/';
         ab.network.socket = io.connect(ab.network.server);
@@ -235,7 +239,8 @@ Appbase = {
                                 extras.path = key;
 
                                 return ab.graph.storage.get('uuid_edges',uuid,extras).then(function(edges){
-                                    return Promise.resolve({uuid:uuid,edges:edges});
+                                    edges.uuid = uuid;
+                                    return Promise.resolve(edges);
                                 });
                             }).then(resolve,reject);
                         break;
@@ -395,6 +400,7 @@ Appbase = {
                         break;
 
                     case 'uuid_edges':
+
                         /*
                          obj expected:
                          {
@@ -605,8 +611,8 @@ Appbase = {
                         extras.path = key;
 
                         if(!val.uuid){
-
                             ab.graph.storage.get('path_uuid',key).then(function(uuid){
+
                                 ab.graph.storage.set('uuid_edges',uuid,val,extras).then(resolve,reject);
                             },reject);
 
@@ -651,39 +657,65 @@ Appbase = {
                 return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val) : {};
             },
             set: function(path,edges,extras){
+
                 return new Promise(function(resolve,reject){
                     if(extras.isLocal){
                         /*
                          expected when local
                          edges: {
-                         'edgeName':path
-                         } - only one edge
+                            edgeName: 'name',
+                            target: appbase ref,
+                            priority: priority
+                         }
                          */
-                        if(edges.length >1){
-                            reject('Only one edge should be added  at once, locally');
+                        //todo: validation
+
+                        console.log(edges.name);
+
+                        var edgeName = edges.name;
+                        var edgePath = edges.ref? edges.ref.path():null;
+                        var priority = edges.priority;
+
+                        if(!edgeName && !edgePath){
+
+                            reject('Invalid arguments');
                             return;
                         }
 
-                        var edgeName = edges.keys()[0];
-                        var edgePath = edges[edgeName];
+                        if(!edgeName){
+
+                            ab.graph.storage.get('path_uuid',edgePath).then(function(uuid){
+                                edgeName = uuid;
+
+                                stepTwo();
+                            },reject);
+                        } else {
+                            stepTwo();
+                        }
 
                         var handleServer = function(){
                             resolve();
                             //TODO: server, resolve,reject, timestamping
                         };
 
-                        if(edgePath){
-                            ab.graph.path_vertex.get(edgePath)
-                            .then(function(edgeVertex){
-                                edges[edgeName] = {
-                                    //timestamp: null
-                                };
+                        var stepTwo = function(){
 
+                            if(edges.target){
+                                ab.graph.path_vertex.get(edgePath)
+                                    .then(function(edgeVertex){
+                                        edges[edgeName] = {
+                                            timestamp: ab.util.timestamp(),
+                                            priority: priority? priority:ab.util.timestamp()
+                                        };
+
+                                        ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                                    },reject);
+                            } else { //deletion
                                 ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
-                            },reject);
-                        } else { //deletion
-                            ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                            }
                         }
+
+
 
                     } else { //server data has changed
                         ab.graph.storage.set('path_edges',path,edges,extras).then(resolve,reject);
@@ -883,14 +915,30 @@ Appbase = {
                 //TODO:
             }
 
-            exports.edges.add = function(ref,options,callback){
-                ab.graph.path_out_edges.set(priv.path,{edgeName:ref.path()},{isLocal:true,patch:true,shouldExist:true}).then(function(){
+            exports.edges.add = function(args,callback){
+                if(args.ref && args.ref.path()){
+                    args.target = args.ref.path();
+                } else {
+                    callback('Invalid arguments');
+                }
+
+                ab.graph.path_out_edges
+                    .set(priv.path,args,{isLocal:true,patch:true,shouldExist:true})
+                    .then(function(){
                     callback(false); //todo: ref and snap
                 },callback);
+
             }
 
-            exports.edges.remove = function(edgeName,callback){
-                ab.graph.path_out_edges.set(priv.path,{edgeName:null},{isLocal:true,patch:true,shouldExist:true}).then(function(){
+            exports.edges.remove = function(args,callback){
+
+                if(!((args.ref && args.ref.path()) || args.name)){
+                    callback('Invalid arguments');
+                }
+
+                args.target = null; //delete
+
+                ab.graph.path_out_edges.set(priv.path,args,{isLocal:true,patch:true,shouldExist:true}).then(function(){
                     callback(false);// todo: ref and snap
                 },callback);
             }
