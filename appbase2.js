@@ -173,7 +173,7 @@ Appbase = {
                              */
 
                             reject(ab.errors.vertex_not_found) //for now, as server is not available
-
+                            return;
                         }
                         //todo: cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
@@ -194,7 +194,7 @@ Appbase = {
                              */
 
                             reject(ab.errors.vertex_not_found); //for now, as server is not available
-
+                            return;
                         }
                         //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
@@ -260,6 +260,7 @@ Appbase = {
                         /*expected string*/
                         if(typeof val != "string"){
                             reject('UUID must be a string');
+                            return;
                         }
 
                         var cached = ab.caching.get(what,key);
@@ -279,6 +280,7 @@ Appbase = {
                         /*expected string*/
                         if(typeof val != "string"){
                             reject ('UUID must be a string');
+                            return;
                         }
 
                         ab.caching.set(what,key,val);
@@ -300,7 +302,8 @@ Appbase = {
 
 
                         if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                            reject ('Object not valid.');
+                            reject ('Object not valid. 1');
+                            return;
                         }
 
 
@@ -308,7 +311,8 @@ Appbase = {
                         var storedVertex = cached? cached.val:undefined;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
-                            reject('Object not valid.');
+                            resolve(); //ignore
+                            return;
                         }
 
                         if(extras.patch && storedVertex){
@@ -349,7 +353,8 @@ Appbase = {
                          */
 
                         if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
-                            reject ('Object not valid.');
+                            reject ('Object not valid. 3');
+                            return;
                         }
 
                         extras.path = key;
@@ -502,6 +507,7 @@ Appbase = {
                                         } else {
                                             //it should not end up here
                                             reject('Edge data wrong');
+                                            return;
                                         }
                                     }
 
@@ -570,6 +576,7 @@ Appbase = {
                                         storeNow();
                                     } else {
                                         reject("Vertex not found.")
+                                        return;
                                     }
 
                                 },reject);
@@ -602,7 +609,8 @@ Appbase = {
                          */
 
                         if(typeof val != "object"  || ! val.properties || typeof val.timestamp == 'undefined'){
-                            reject ('Object not valid.');
+                            reject ('Object not valid. 4');
+                            return;
                         }
 
                         if(!extras)
@@ -629,6 +637,7 @@ Appbase = {
 
                     default :
                         reject('What to set?');
+                        return;
 
                 }
             })
@@ -659,6 +668,24 @@ Appbase = {
             set: function(path,edges,extras){
 
                 return new Promise(function(resolve,reject){
+
+                    var stepTwo = function(){
+                        if(edges.target){
+                            ab.graph.path_vertex.get(edgePath)
+                                .then(function(edgeVertex){
+                                    edges[edgeName] = {
+                                        timestamp: ab.util.timestamp(),
+                                        priority: priority? priority:ab.util.timestamp()
+                                    };
+
+                                    ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                                },reject);
+                        } else { //deletion
+                            ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                        }
+                    }
+
+
                     if(extras.isLocal){
                         /*
                          expected when local
@@ -669,8 +696,6 @@ Appbase = {
                          }
                          */
                         //todo: validation
-
-                        console.log(edges.name);
 
                         var edgeName = edges.name;
                         var edgePath = edges.ref? edges.ref.path():null;
@@ -686,7 +711,6 @@ Appbase = {
 
                             ab.graph.storage.get('path_uuid',edgePath).then(function(uuid){
                                 edgeName = uuid;
-
                                 stepTwo();
                             },reject);
                         } else {
@@ -697,24 +721,6 @@ Appbase = {
                             resolve();
                             //TODO: server, resolve,reject, timestamping
                         };
-
-                        var stepTwo = function(){
-
-                            if(edges.target){
-                                ab.graph.path_vertex.get(edgePath)
-                                    .then(function(edgeVertex){
-                                        edges[edgeName] = {
-                                            timestamp: ab.util.timestamp(),
-                                            priority: priority? priority:ab.util.timestamp()
-                                        };
-
-                                        ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
-                                    },reject);
-                            } else { //deletion
-                                ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
-                            }
-                        }
-
 
 
                     } else { //server data has changed
@@ -888,6 +894,7 @@ Appbase = {
             exports.properties.add = function(prop,val,localCallback){
                 var vertex = {properties:{}};
                 vertex.properties[prop] = val;
+                vertex.timestamp = ab.util.timestamp();
 
                 ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
                     localCallback && localCallback(false);
@@ -903,6 +910,7 @@ Appbase = {
             exports.properties.remove = function(prop,localCallback){
                 var vertex = {properties:{}};
                 vertex.properties[prop] = null;
+                vertex.timestamp = ab.util.timestamp();
 
                 ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
                     localCallback && localCallback(false);
@@ -925,8 +933,8 @@ Appbase = {
                 ab.graph.path_out_edges
                     .set(priv.path,args,{isLocal:true,patch:true,shouldExist:true})
                     .then(function(){
-                    callback(false); //todo: ref and snap
-                },callback);
+                            callback(false); //todo: ref and snap
+                        },callback);
 
             }
 
