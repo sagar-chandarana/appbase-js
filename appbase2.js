@@ -424,16 +424,19 @@ Appbase = {
                          */
 
                         var storeNow = function(){
-
                             var toBeFired = [];
 
                             var cached = ab.caching.get(what,key);
                             var storedByName = cached.val? cached.val.byName:null;
                             var storedByPriority = cached.val?cached.val.byPriority:{};
-                            var lowestPriority = cached.val? cached.val.lowestPriority:+Infinity;
-                            var highestPriority = cached.val? cached.val.highestPriority:-Infinity;
+                            var lowestPriority = cached.val && cached.val.lowestPriority ? cached.val.lowestPriority:+Infinity;
+                            var highestPriority = cached.val && cached.val.lowestPriority? cached.val.highestPriority:-Infinity;
 
                             var setHighLow = function(prio){
+                                if(typeof prio != 'number' ){
+                                    reject( "Internal Error - while setting priority");
+                                }
+
                                 if(prio > highestPriority){
                                     highestPriority = prio;
                                 }
@@ -459,8 +462,8 @@ Appbase = {
                             }
                             */
 
-
                             if(extras.patch && storedByName){
+
                                 for(var edgeName in val){
                                     //TODO: timestamps, if no priority given in the local, timestamp is the priority
                                     if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
@@ -475,6 +478,14 @@ Appbase = {
                                             var priority = storedByName[edgeName].priority;
                                             storedByPriority[priority].splice(storedByPriority[priority].indexOf(edgeName),1);
                                             delete storedByName[edgeName];
+
+                                            if(priority == lowestPriority){
+                                                lowestPriority = Infinity;
+                                            }
+
+                                            if(priority == highestPriority){
+                                                highestPriority = -Infinity;
+                                            }
 
                                         } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
 
@@ -494,10 +505,10 @@ Appbase = {
                                             setHighLow(newPriority);
 
                                             if(oldPriority == lowestPriority){
-                                                lowestPriority = +Infinity;
+                                                lowestPriority = Infinity;
                                             }
 
-                                            if(oldPriority == highestPriority ){
+                                            if(oldPriority == highestPriority){
                                                 highestPriority= -Infinity;
                                             }
 
@@ -549,7 +560,10 @@ Appbase = {
 
                             if(lowestPriority == +Infinity || highestPriority == -Infinity){
                                 for(var prio in storedByPriority){
-                                    setHighLow(prio);
+
+                                    if(storedByPriority[prio].length){
+                                        setHighLow(parseInt(prio));
+                                    }
                                 }
                             }
 
@@ -608,7 +622,7 @@ Appbase = {
 
                          */
 
-                        if(typeof val != "object"  || ! val.properties || typeof val.timestamp == 'undefined'){
+                        if(typeof val != "object"){
                             reject ('Object not valid. 4');
                             return;
                         }
@@ -669,8 +683,14 @@ Appbase = {
 
                 return new Promise(function(resolve,reject){
 
+
+                    var handleServer = function(){
+                        resolve();
+                        //TODO: server, resolve,reject, timestamping
+                    };
+
                     var stepTwo = function(){
-                        if(edges.target){
+                        if(newEdge.target){
                             ab.graph.path_vertex.get(edgePath)
                                 .then(function(edgeVertex){
                                     edges[edgeName] = {
@@ -681,6 +701,7 @@ Appbase = {
                                     ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
                                 },reject);
                         } else { //deletion
+                            edges[edgeName] = null;
                             ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
                         }
                     }
@@ -697,9 +718,11 @@ Appbase = {
                          */
                         //todo: validation
 
-                        var edgeName = edges.name;
-                        var edgePath = edges.ref? edges.ref.path():null;
-                        var priority = edges.priority;
+                        var newEdge = edges;
+                        edges = {};
+                        var edgeName = newEdge.name;
+                        var edgePath = newEdge.ref? newEdge.ref.path():null;
+                        var priority = newEdge.priority;
 
                         if(!edgeName && !edgePath){
 
@@ -716,11 +739,6 @@ Appbase = {
                         } else {
                             stepTwo();
                         }
-
-                        var handleServer = function(){
-                            resolve();
-                            //TODO: server, resolve,reject, timestamping
-                        };
 
 
                     } else { //server data has changed
@@ -864,7 +882,6 @@ Appbase = {
                 callback(error);
             });
         }
-
     }
 
     ab.interface.init = function(){

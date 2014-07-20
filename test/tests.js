@@ -206,7 +206,7 @@ if(debugMode){
 
 
     QUnit.test('edges.add, edges.remove',function(assert){
-        expect(24);
+        expect(30);
         var path = 'lol/yello';
         var abRef = Appbase.ref(path);
 
@@ -220,7 +220,7 @@ if(debugMode){
 
         var edgeRef3 = Appbase.create('yoEdge3');
         var edgeName3 = 'haha3';
-        var priority3 = undefined; // timestamp // highest
+        var priority3 = 1000; // timestamp // highest
 
 
 
@@ -277,6 +277,7 @@ if(debugMode){
 
                 assert.ok(!edges.byName[edgeName3],'edge3-removed-byName object');
 
+
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) == -1,'edge3-removed-byPriority object');
                 assert.equal(edges.lowestPriority,priority1,'edge3-removed-lowestPrio');
                 assert.equal(edges.highestPriority,priority2,'edge3-removed-highestPrio');
@@ -308,8 +309,8 @@ if(debugMode){
                 assert.ok(!edges.byName[edgeName1],'edge1-removed-byName object');
 
                 assert.ok(edges.byPriority[priority1].indexOf(edgeName1) == -1,'edge1-removed-byPriority object');
-                assert.equal(edges.lowestPriority,+Infinity,'edge1-removed-lowestPrio');
-                assert.equal(edges.highestPriority,-Infinity,'edge1-removed-highestPrio');
+                assert.equal(edges.lowestPriority,null,'edge1-removed-lowestPrio');
+                assert.equal(edges.highestPriority,null,'edge1-removed-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
