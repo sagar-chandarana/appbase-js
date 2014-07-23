@@ -521,7 +521,7 @@ Appbase = {
                             if(extras.patch && storedByName){
 
                                 for(var edgeName in val){
-                                    //TODO: timestamps, if no priority given in the local, timestamp is the priority
+                                    //TODO: timestamps, if no priority given in the local, server-timestamp is the priority
                                     if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
                                         if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority ){ //todo: 1)server delete flag 2)//todo: check for uuids
                                             //remove edge
@@ -551,6 +551,8 @@ Appbase = {
                                             storedByPriority[oldPriority].splice(storedByPriority[oldPriority].indexOf(edgeName),1);
 
                                             var newPriority = val[edgeName].priority;
+                                            storedByName[edgeName].priority = newPriority;
+
                                             if(!storedByPriority[newPriority]){
                                                 storedByPriority[newPriority] = [];
                                             }
@@ -567,7 +569,6 @@ Appbase = {
                                             if(oldPriority == highestPriority){
                                                 highestPriority= -Infinity;
                                             }
-
 
                                             delete val[edgeName];
 
@@ -751,7 +752,7 @@ Appbase = {
                                 .then(function(edgeVertex){
                                     edges[edgeName] = {
                                         timestamp: ab.util.timestamp(),
-                                        priority: priority? priority:ab.util.timestamp()
+                                        priority: priority != undefined? priority:ab.util.timestamp()
                                     };
 
                                     ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
@@ -927,7 +928,6 @@ Appbase = {
                                 })
                             }
                         }
-
 
                     } else if (event == 'edge_changed'){
                         //todo: think: need anything special?

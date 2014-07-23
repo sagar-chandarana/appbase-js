@@ -192,12 +192,11 @@ if(debugMode){
 
 
     QUnit.test('edges.add, edges.remove',function(assert){
-        expect(30);
+        expect(37);
         var collection = 'lol';
         var key = 'rofl';
         var abRef = Appbase.create(collection,key);
         var path = abRef.path();
-
 
         var edgeRef1 = Appbase.create('yoEdge1');
         var edgeName1 = 'haha1';
@@ -212,7 +211,7 @@ if(debugMode){
         var priority3 = undefined; // timestamp // highest
 
 
-
+        //addition
         abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -260,6 +259,28 @@ if(debugMode){
             });
         });
 
+        //replacing/modifying
+
+        var prev_priority1 = priority1;
+        priority1 = 0;
+
+        abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
+            assert.equal(error,false,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(edges.byName[edgeName1],'edge1-new prio-byName object test1');
+                assert.ok(edges.byName[edgeName1].priority==priority1,'edge1-new prio-byName object test2');
+                assert.ok(edges.byPriority[priority1].indexOf(edgeName1) > -1,'edge1-new prio-byPriority object');
+                assert.ok(edges.byPriority[prev_priority1].indexOf(edgeName1) == -1,'edge1-new prio-byPriority object');
+                assert.equal(edges.lowestPriority,priority1,'edge1-new prio-lowestPrio');
+                assert.equal(edges.highestPriority,priority3,'edge1-new prio-higestPrio');
+
+            },function(error){
+                assert.equal(error,'','error aayo');
+            });
+        });
+
+
         abRef.edges.remove({name:edgeName3},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -305,7 +326,6 @@ if(debugMode){
                 assert.equal(error,'','error aayo');
             });
         });
-
 
     });
 
