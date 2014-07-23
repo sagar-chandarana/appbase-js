@@ -110,11 +110,32 @@ Appbase = {
         ab.caching.inMemory = {
         };
 
-        ab.caching.get = function(prefix,key){
+        var keyValFromArgs = function(prefix,key,val){
+            if(typeof val == 'undefined'){
+                var val = key;
+                key = prefix;
+            } else {
+                key = prefix+':'+key;
+            }
+
+            return {key:key,val:val}
+        }
+
+        var keyFromArgs = function(prefix,key){
             if(!key){
                 var key = prefix;
             } else {
                 key = prefix+':'+key;
+            }
+
+            return key;
+        }
+
+        ab.caching.get = function(prefix,key){
+            var key = keyFromArgs(prefix,key);
+
+            if(!key){
+                throw 'Invalid arguments for getting from cache.'
             }
 
             if(ab.caching.inMemory[key]){
@@ -131,23 +152,36 @@ Appbase = {
         }
 
         ab.caching.set = function(prefix,key,val){
-            if(typeof val == 'undefined'){
-                var val = key;
-                key = prefix;
-            } else {
-                key = prefix+':'+key;
+            var key_val = keyValFromArgs(prefix,key,val);
+            var key = key_val.key;
+            var val = key_val.val;
+
+            if(!key){
+                throw 'Invalid arguments for setting the cache.'
             }
 
             ab.caching.inMemory[key] = val;
-            amplify.store(key,val);
+
+            if(val == undefined){
+                amplify.store(key,null);
+            } else {
+                amplify.store(key,val);
+            }
         }
 
-        ab.caching.clear = function(){
-            ab.caching.inMemory = {}; //clear
-            var key_values = amplify.store();
-            for(var key in key_values){
-                amplify.store(key,null); //clear
+        ab.caching.clear = function(prefix,key){
+            var key = keyFromArgs(prefix,key);
+
+            if(key){
+                ab.caching.set(key,undefined); //clear
+            } else {
+                ab.caching.inMemory = {}; //clear
+                var key_values = amplify.store();
+                for(var key in key_values){
+                    amplify.store(key,null); //clear
+                }
             }
+
         }
 
     }
@@ -167,7 +201,6 @@ Appbase = {
                         if(cached.val){
                             resolve(cached.val);
                         } else {
-
 
                             /*TODO: fetch from server
                              amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
@@ -219,7 +252,26 @@ Appbase = {
 
                                 return ab.graph.storage.get('uuid_vertex',uuid,extras);
                             })
-                            .then(resolve,reject);
+                            .then(function(vertex){
+
+                                ab.caching.clear("creation",key);
+                                resolve(vertex);
+
+                            },function(error){
+
+                                if(error == ab.errors.vertex_not_found && ab.caching.get("creation",key)){
+
+                                    //Vertex creation
+                                    //TODO: serverside creation of UUIDs for new objects
+                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true}).then(function(){
+                                        ab.caching.clear("creation",key);
+                                        return ab.graph.storage.get('path_vertex',key);
+                                    }).then(resolve,reject);
+
+                                } else {
+                                    reject(error);
+                                }
+                            });
                         break;
 
                     case 'uuid_edges':
@@ -235,19 +287,15 @@ Appbase = {
                         break;
 
                     case 'path_edges':
-                        ab.graph.storage.get('path_uuid',key)
-                            .then(function(uuid){
-                                if(!uuid){
-                                    resolve(false);
-                                }
-
+                        ab.graph.storage.get('path_vertex',key)
+                            .then(function(vertex){
                                 if(!extras)
                                     var extras = {};
 
                                 extras.path = key;
 
-                                return ab.graph.storage.get('uuid_edges',uuid,extras).then(function(edges){
-                                    edges.uuid = uuid;
+                                return ab.graph.storage.get('uuid_edges',vertex.uuid,extras).then(function(edges){
+                                    edges.uuid = vertex.uuid;
                                     return Promise.resolve(edges);
                                 });
                             }).then(resolve,reject);
@@ -641,9 +689,9 @@ Appbase = {
                         extras.path = key;
 
                         if(!val.uuid){
-                            ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                            ab.graph.storage.get('path_vertex',key).then(function(vertex){
 
-                                ab.graph.storage.set('uuid_edges',uuid,val,extras).then(resolve,reject);
+                                ab.graph.storage.set('uuid_edges',vertex.uuid,val,extras).then(resolve,reject);
                             },reject);
 
                         } else {
@@ -666,7 +714,7 @@ Appbase = {
         }
 
         ab.graph.path_vertex = {
-            get:function(path){
+            get:function(path,extras){
                 return ab.graph.storage.get('path_vertex',path);
             },
             getSync: function(path){
@@ -740,8 +788,8 @@ Appbase = {
 
                         if(!edgeName){
 
-                            ab.graph.storage.get('path_uuid',edgePath).then(function(uuid){
-                                edgeName = uuid;
+                            ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                edgeName = vertex.uuid;
                                 stepTwo();
                             },reject);
                         } else {
@@ -990,24 +1038,12 @@ Appbase = {
 
         ab.interface.global = {};
 
-        ab.interface.global.create = function(collection,key,localCallback){
-            if(typeof key == 'function'){
-                var localCallback = key;
-                key = undefined;
-            }
-
+        ab.interface.global.create = function(collection,key){
             if(!key){
-              var key = ab.util.uuid(); //TODO: it should not contain numbers
+              var key = ab.util.uuid();
             }
 
-            //TODO: serverside creation of UUIDs for new objects
-            ab.graph.path_vertex.set(collection+'/'+key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true,shouldExist:false}).then(function(){
-
-                localCallback && localCallback(false);
-
-            },localCallback ? localCallback: function(error){
-                throw error;
-            });
+            ab.caching.set('creation',collection+'/'+key,true);
 
             return ab.interface.ref_obj(collection+'/'+key);
         }
@@ -1041,7 +1077,6 @@ Appbase = {
         ab.interface.init();
         ab.debug.init();
         ab.errors.init();
-
     }
 
     main();

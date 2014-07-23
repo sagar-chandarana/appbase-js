@@ -96,24 +96,6 @@ if(debugMode){
 
 
     QUnit.module('DEBUG ON: Appbase global methods');
-    QUnit.test('Appbase.create',function(assert){
-
-        Appbase.create('lol','yello',function(error){
-            assert.ok(!error,'No error for a new object');
-            var uuid = Appbase.debug.ab.caching.get('path_uuid','lol/yello');
-            assert.ok(uuid.val,'path_uuid exists for the new object');
-            assert.ok(Appbase.debug.ab.caching.get('uuid_vertex',uuid.val),'vertex_uuid exists for the new object');
-
-        });
-
-        Appbase.create('lol','yello',function(error){
-            assert.equal(error,"Vertex already exists.",'throw error for existing object');
-        });
-
-        Appbase.create('lol',function(error){
-            assert.ok(!error,'No error for a new object with no given key');
-        })
-    });
 
     QUnit.module('DEBUG ON: Appbase Ref', {
         setup: function() {
@@ -123,9 +105,9 @@ if(debugMode){
         }
     });
 
-    QUnit.test('Appbase.ref,  properties.add, remove',function(assert){
+    QUnit.test('Appbase.create,  properties.add, remove',function(assert){
         var path = 'lol/yello';
-        var abRef = Appbase.ref(path);
+        var abRef = Appbase.create('lol','yello');
 
         var prop = 'abc';
         var value = 'pqr';
@@ -170,7 +152,9 @@ if(debugMode){
     QUnit.test('properties.on',function(assert){
         expect(12); //this is imp
 
-        var abRef = Appbase.create('lala');
+        var path = Appbase.create('lala').path();
+
+        var abRef = Appbase.ref(path);
 
         var prop = 'abc';
         var value = 'pqr';
