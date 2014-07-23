@@ -75,6 +75,8 @@ QUnit.test('Appbase.create should expect only two args, and strings should not c
 
 
 if(debugMode){
+    Appbase.debug.ab.caching.clear();
+
     QUnit.module('DEBUG ON: Appbase internal methods');
     QUnit.test( "path manipulation methods", function( assert ) {
         expect(13);
@@ -95,18 +97,17 @@ if(debugMode){
 
     QUnit.module('DEBUG ON: Appbase global methods');
     QUnit.test('Appbase.create',function(assert){
+
         Appbase.create('lol','yello',function(error){
-            assert.equal(error,"Vertex already exists.",'throw error for existing object');
-        });
-
-        var random_key = ab.util.uuid();
-
-        Appbase.create('lol',random_key,function(error){
             assert.ok(!error,'No error for a new object');
-            var uuid = Appbase.debug.ab.caching.get('path_uuid','lol/'+random_key);
+            var uuid = Appbase.debug.ab.caching.get('path_uuid','lol/yello');
             assert.ok(uuid.val,'path_uuid exists for the new object');
             assert.ok(Appbase.debug.ab.caching.get('uuid_vertex',uuid.val),'vertex_uuid exists for the new object');
 
+        });
+
+        Appbase.create('lol','yello',function(error){
+            assert.equal(error,"Vertex already exists.",'throw error for existing object');
         });
 
         Appbase.create('lol',function(error){
@@ -116,6 +117,7 @@ if(debugMode){
 
     QUnit.module('DEBUG ON: Appbase Ref', {
         setup: function() {
+
         },
         teardown: function() {
         }
@@ -207,8 +209,11 @@ if(debugMode){
 
     QUnit.test('edges.add, edges.remove',function(assert){
         expect(30);
-        var path = 'lol/yello';
-        var abRef = Appbase.ref(path);
+        var collection = 'lol';
+        var key = 'rofl';
+        var abRef = Appbase.create(collection,key);
+        var path = abRef.path();
+
 
         var edgeRef1 = Appbase.create('yoEdge1');
         var edgeName1 = 'haha1';
@@ -220,7 +225,7 @@ if(debugMode){
 
         var edgeRef3 = Appbase.create('yoEdge3');
         var edgeName3 = 'haha3';
-        var priority3 = 1000; // timestamp // highest
+        var priority3 = undefined; // timestamp // highest
 
 
 

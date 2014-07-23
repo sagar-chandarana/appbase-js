@@ -142,6 +142,14 @@ Appbase = {
             amplify.store(key,val);
         }
 
+        ab.caching.clear = function(){
+            ab.caching.inMemory = {}; //clear
+            var key_values = amplify.store();
+            for(var key in key_values){
+                amplify.store(key,null); //clear
+            }
+        }
+
     }
 
     ab.graph.init = function(){
