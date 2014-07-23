@@ -192,7 +192,7 @@ if(debugMode){
 
 
     QUnit.test('edges.add, edges.remove',function(assert){
-        expect(37);
+        expect(44);
         var collection = 'lol';
         var key = 'rofl';
         var abRef = Appbase.create(collection,key);
@@ -260,7 +260,6 @@ if(debugMode){
         });
 
         //replacing/modifying
-
         var prev_priority1 = priority1;
         priority1 = 0;
 
@@ -280,17 +279,36 @@ if(debugMode){
             });
         });
 
+        var prev_priority2 = priority2;
+        priority2 = -100;
 
+        abRef.edges.add({ref:edgeRef2, priority:priority2},function(error){
+            assert.equal(error,false,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(edges.byName[edgeName2],'edge1-new prio-byName object test1');
+                assert.ok(edges.byName[edgeName2].priority==priority2,'edge2-new prio-byName object test2');
+                assert.ok(edges.byPriority[priority2].indexOf(edgeName2) > -1,'edge2-new prio-byPriority object test1');
+                assert.ok(edges.byPriority[prev_priority2].indexOf(edgeName2) == -1,'edge2-new prio-byPriority object test2');
+                assert.equal(edges.lowestPriority,priority2,'edge2-new prio-lowestPrio');
+                assert.equal(edges.highestPriority,priority3,'edge2-new prio-higestPrio');
+
+            },function(error){
+                assert.equal(error,'','error aayo');
+            });
+        });
+
+
+        //removal
         abRef.edges.remove({name:edgeName3},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
 
                 assert.ok(!edges.byName[edgeName3],'edge3-removed-byName object');
 
-
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) == -1,'edge3-removed-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge3-removed-lowestPrio');
-                assert.equal(edges.highestPriority,priority2,'edge3-removed-highestPrio');
+                assert.equal(edges.lowestPriority,priority2,'edge3-removed-lowestPrio');
+                assert.equal(edges.highestPriority,priority1,'edge3-removed-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');

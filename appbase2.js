@@ -415,7 +415,6 @@ Appbase = {
 
                         extras.path = key;
 
-
                         var storeNow = function(){
 
                             if(!val.uuid){
@@ -480,15 +479,16 @@ Appbase = {
                          */
 
                         var storeNow = function(){
-                            var toBeFired = [];
 
+                            var toBeFired = [];
                             var cached = ab.caching.get(what,key);
                             var storedByName = cached.val? cached.val.byName:null;
                             var storedByPriority = cached.val?cached.val.byPriority:{};
-                            var lowestPriority = cached.val && cached.val.lowestPriority ? cached.val.lowestPriority:+Infinity;
-                            var highestPriority = cached.val && cached.val.lowestPriority? cached.val.highestPriority:-Infinity;
+                            var lowestPriority = cached.val && cached.val.lowestPriority != null ? cached.val.lowestPriority:+Infinity;
+                            var highestPriority = cached.val && cached.val.highestPriority != null? cached.val.highestPriority:-Infinity;
 
                             var setHighLow = function(prio){
+
                                 if(typeof prio != 'number' ){
                                     reject( "Internal Error - while setting priority");
                                 }
@@ -542,6 +542,8 @@ Appbase = {
                                             if(priority == highestPriority){
                                                 highestPriority = -Infinity;
                                             }
+
+
 
                                         } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
 
@@ -630,7 +632,6 @@ Appbase = {
                                 lowestPriority:lowestPriority,
                                 highestPriority:highestPriority
                             });
-
 
                             resolve();
 
