@@ -519,13 +519,21 @@ Appbase = {
                             */
 
                             if(extras.patch && storedByName){
-
                                 for(var edgeName in val){
                                     //TODO: timestamps, if no priority given in the local, server-timestamp is the priority
-                                    if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
-                                        if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority ){ //todo: 1)server delete flag 2)//todo: check for uuids
-                                            //remove edge
 
+                                    if(val[edgeName] && val[edgeName].priority == "time"){
+                                        val[edgeName].priority = val[edgeName].timestamp;
+                                    }
+
+                                    if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
+
+                                        if(val[edgeName] && val[edgeName].priority == undefined){
+                                            val[edgeName].priority = storedByName[edgeName].priority;
+                                        }
+
+                                        if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority){ //todo: 1)server delete flag 2)//todo: check for uuids
+                                            //remove edge
                                             toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: vertex
 
                                             //todo: remove path_uuid for edge
@@ -589,6 +597,10 @@ Appbase = {
                             for(var edgeName in val){
                                 if(!val[edgeName]) // todo: server delete flag
                                     continue;
+
+                                if(val[edgeName].priority == undefined){
+                                    val[edgeName].priority = val[edgeName].timestamp;
+                                }
 
                                 if(val[edgeName].data){
                                     var path = extras.path+'/'+edgeName;
@@ -753,7 +765,7 @@ Appbase = {
                                 .then(function(edgeVertex){
                                     edges[edgeName] = {
                                         timestamp: ab.util.timestamp(),
-                                        priority: priority != undefined? priority:ab.util.timestamp()
+                                        priority: priority
                                     };
 
                                     ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
@@ -763,7 +775,6 @@ Appbase = {
                             ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
                         }
                     }
-
 
                     if(extras.isLocal){
                         /*

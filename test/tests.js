@@ -192,7 +192,7 @@ if(debugMode){
 
 
     QUnit.test('edges.add, edges.remove',function(assert){
-        expect(44);
+        expect(58);
         var collection = 'lol';
         var key = 'rofl';
         var abRef = Appbase.create(collection,key);
@@ -286,12 +286,57 @@ if(debugMode){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
 
-                assert.ok(edges.byName[edgeName2],'edge1-new prio-byName object test1');
+                assert.ok(edges.byName[edgeName2],'edge2-new prio-byName object test1');
                 assert.ok(edges.byName[edgeName2].priority==priority2,'edge2-new prio-byName object test2');
                 assert.ok(edges.byPriority[priority2].indexOf(edgeName2) > -1,'edge2-new prio-byPriority object test1');
                 assert.ok(edges.byPriority[prev_priority2].indexOf(edgeName2) == -1,'edge2-new prio-byPriority object test2');
                 assert.equal(edges.lowestPriority,priority2,'edge2-new prio-lowestPrio');
                 assert.equal(edges.highestPriority,priority3,'edge2-new prio-higestPrio');
+
+            },function(error){
+                assert.equal(error,'','error aayo');
+            });
+        });
+
+        var prev_priority3 = priority3;
+        priority3 = undefined;
+
+        abRef.edges.add({ref:edgeRef3, name:edgeName3},function(error){
+            assert.equal(error,false,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(edges.byName[edgeName3] && edges.byName[edgeName3].priority,'edge3-no prio-byName object');
+
+                priority3 = edges.byName[edgeName3].priority;
+
+                assert.equal(prev_priority3,priority3,'edge3-no prio- new prio equals old prio');
+
+                assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-no prio-byPriority object');
+                assert.equal(edges.lowestPriority,priority2,'edge3-no prio-lowestPrio');
+                assert.equal(edges.highestPriority,priority3,'edge3-no prio-highestPrio');
+
+            },function(error){
+                assert.equal(error,'','error aayo');
+            });
+        });
+
+        var prev_priority3 = priority3;
+        priority3 = "time";
+
+        abRef.edges.add({ref:edgeRef3,name:edgeName3, priority:priority3},function(error){
+            assert.equal(error,false,'no error');
+            Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
+
+                assert.ok(edges.byName[edgeName3],'edge3-time prio-byName object test1');
+
+                priority3 = edges.byName[edgeName3].priority;
+
+                assert.notEqual(prev_priority3,priority3,'edge3-time prio- new prio doesnt equal old prio');
+                assert.ok(edges.byName[edgeName3].priority==priority3,'edge3-time prio-byName object test2');
+                assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-time prio-byPriority object test1');
+                assert.ok(edges.byPriority[prev_priority3].indexOf(edgeName3) == -1,'edge3-time prio-byPriority object test2');
+                assert.equal(edges.lowestPriority,priority2,'edge3-time prio-lowestPrio');
+                assert.equal(edges.highestPriority,priority3,'edge3-time prio-higestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
