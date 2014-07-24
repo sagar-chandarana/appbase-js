@@ -1,5 +1,15 @@
+/**
+ * Created by Sagar on 4/7/14.
+ */
+
+
+//setting global
 Object.isEmpty = function (obj) {
     return Object.keys(obj).length === 0;
+}
+
+Object.clone = function (obj){
+    return JSON.parse(JSON.stringify(obj));
 }
 
 Appbase = {
@@ -9,310 +19,15 @@ Appbase = {
 //Enclosing the whole code
 (function () {
     //Name space
-    var ab = {
+    ab = {
         util:{},
-        net:{
-            server:'http://162.242.213.228:3000/'
-        },
-        pro:{},
-        auth:{},
-        events:{},
-        store:{
-            listeners:{},
-            rootpath: {},
-            obj:{
-                put:{
-                    q:{
-                        objs:{}
-                    }
-                }
-                ,level1:{
-                    storage:{
-
-                    },
-                    get: function(key){
-                        console.log('getting',key);
-                        if(ab.store.obj.level1.storage[key]){
-                            return ab.store.obj.level1.storage[key];
-                        } else {
-                            var level2obj = ab.store.obj.level2.get(key);
-                            if (level2obj){
-                                ab.store.obj.level1.storage[key] = new AppbaseObj(level2obj);
-                                return ab.store.obj.level1.storage[key];
-                            }
-                        }
-                    },
-                    set: function(key,obj){
-                        console.log('setting',key);
-                        //ab.store.obj.level1.storage[key] = obj;
-                        //ab.store.obj.level2.set(key,obj.exportToServer());
-                    }
-                },
-                level2: {
-                    get: function(key){
-                        //return amplify.store(key);
-                    },
-                    set: function(key,obj){
-                        //amplify.store(key,obj);
-                    }
-                }
-                ,get:{}
-                ,parent:{
-                    objs:{
-
-                    }
-                }
-            }
-        }
-    };
-
-    ab.events.types = {
-        extern: {
-            object_added:"object_added",
-            object_removed:"object_removed",
-            value:"value",
-            object_changed:"object_changed"
-        },
-        intern: {
-            object_added:"object_added",
-            object_removed:"object_removed",
-            value:"value",
-            value_arrived:"value_arrived",
-            object_changed:"object_changed"
-        }
-    }
-
-    ab.events.initForPath = function(path){
-        if (typeof ab.store.listeners[path] == 'undefined'){
-            ab.store.listeners[path] = {};
-
-            for(var event in ab.events.types.extern){
-                ab.store.listeners[path][ab.events.types.extern[event]] = {};
-            }
-        }
-    }
-
-    ab.events.fireIntern = function(eventData,data){
-        if(Appbase.debug && Appbase.debug.ignoreFire)
-            return;
-
-        switch(eventData.event){
-            case ab.events.types.intern.value:
-                ab.events.fireExtern(eventData,data);
-                for (var uuid in ab.store.obj.parent.getParents(eventData.onId)){
-                    var newData = ab.util.clone(data);
-                    newData.name = ab.store.obj.parent.getParents(eventData.onId)[uuid].forKey;
-                    newData.prevIndex = 'index';
-                    ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:uuid},newData);
-                }
-                break;
-
-            case ab.events.types.intern.value_arrived:
-                eventData.event = ab.events.types.extern.value;
-                ab.events.fireExtern(eventData,data);
-                break;
-
-            case ab.events.types.intern.object_changed:
-                if(typeof eventData.goUp == 'undefined' || eventData.goUp){
-                    for (var uuid in ab.store.obj.parent.getParents(eventData.onId)){
-                        var newData = ab.util.clone(data);
-                        newData.name = ab.store.obj.parent.getParents(eventData.onId)[uuid].forKey;
-                        newData.prevIndex = 'index';
-                        ab.events.fireIntern({event:ab.events.types.intern.value,onId:uuid},newData);
-                    }
-                }
-                eventData.event = ab.events.types.extern.object_changed;
-                ab.events.fireExtern(eventData,data);
-                break;
-
-            case ab.events.types.intern.object_added:
-                eventData.event = ab.events.types.extern.object_added;
-                ab.events.fireExtern(eventData,data);
-                break;
-
-            case ab.events.types.intern.object_removed:
-                eventData.event = ab.events.types.extern.object_removed;
-                ab.events.fireExtern(eventData,data);
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    var AppbaseSnapObj = function(path, eventData,objData){
-        var toHide = {};
-        toHide.data = ab.util.clone(objData);
-
-        //filling data
-        if(eventData.event == ab.events.types.extern.value){
-            toHide.data.path = path;
-            toHide.data.name = ab.util.back(path);
-
-        } else { //object_* event
-            toHide.data.path = path+'/'+toHide.data.name;
-        }
-
-        toHide.promises = [];
-
-        if(typeof toHide.data.val == 'undefined'){
-            toHide.promises.push(ab.store.obj.get.nowPro(toHide.data.uuid)
-                .then(function(obj){
-                    toHide.data.val = obj.exportProps();
-                    return Promise.resolve();
-                },function(err){
-                    console.log(err);
-                    toHide.data.val = null;
-                    return Promise.resolve();
-                })
-            );
-        }
-
-        if(typeof toHide.data.index == 'undefined'){
-            toHide.promises.push(ab.util.pathToUuidPro(ab.util.cutBack(toHide.data.path))
-                .then(function(uuid){
-                    return ab.store.obj.get.nowPro(uuid,false);
-                })
-                .then(function(obj){
-                    toHide.data.index = obj.linksOrdered.indexOf(toHide.data.name);
-                    return Promise.resolve();
-                },function(err){
-                    console.log(err);
-                    toHide.data.index = null;
-                    return Promise.resolve();
-                })
-            );
-        }
-
-        toHide.data.ref = Appbase.ref(toHide.data.path,true);
-
-        return Promise.all(toHide.promises).then(function(){
-            var toExport = {
-                prevVal:function(){
-                    return toHide.data.prevVal;
-                },
-                val: function(){
-                    return toHide.data.val;
-                },
-                path: function(){
-                    return toHide.data.path;
-                },
-                name: function(){
-                    return toHide.data.name;
-                },
-                ref: function(){
-                    return toHide.data.ref;
-                },
-                index: function(){
-                    return toHide.data.index;
-                },
-                prevIndex: function(){
-                    return toHide.data.prevIndex == 'index'? toHide.data.index : toHide.data.prevIndex;
-                },
-                exportVal: function(){
-                    //TODO:
-                }
-            }
-            if(Appbase.debug){
-                toExport.toHide = toHide;
-            }
-
-            return Promise.resolve(toExport );
-
-        });
-
-    }
-
-    ab.events.fireExtern = function(eventData,data){
-
-        if(eventData.paths)
-            var paths = eventData.paths;
-        else
-            var paths = ab.util.uuidToPaths(eventData.onId);
-
-        for(var i=0; i < paths.length;i++) {
-            console.log('fired:'+ eventData.event+' on:'+eventData.onId+' prop:'+data.name+' uuid:'+data.uuid);
-
-            var fireClosure = function(path) {
-
-                var call = function(callback){
-                    AppbaseSnapObj(path,eventData,data).then(function(snapObj){
-                        setTimeout(callback.bind(undefined,snapObj),0);
-                    });
-                }
-
-                ab.events.initForPath(path);
-
-                if(eventData.callback){
-                    call(eventData.callback);
-                }
-
-                else {
-                    for (var refId in ab.store.listeners[path][eventData.event]){
-                        if(ab.store.listeners[path][eventData.event][refId])
-                            call(ab.store.listeners[path][eventData.event][refId]);
-                    }
-                }
-
-            }
-
-            fireClosure(paths[i]);
-        }
-
-    }
-
-    ab.store.obj.parent.addParent = function(childUuid,parentObj,k){
-        if(typeof ab.store.obj.parent.objs[childUuid] == 'undefined'){
-            ab.store.obj.parent.objs[childUuid] = {	parents: {} }
-        }
-        ab.store.obj.parent.objs[childUuid].parents[parentObj.uuid] = {parent:parentObj,forKey:k};
-    }
-
-    ab.util.uuidToPaths = function(uuid){
-        if(Object.isEmpty(ab.store.obj.parent.getParents(uuid)) ){
-            // root object
-            return [ab.store.rootpath[uuid]];
-        }
-
-        var paths = [];
-
-        var parents =  ab.store.obj.parent.getParents(uuid);
-        for(var parent in parents){
-            var parent_paths = ab.util.uuidToPaths(parent);
-            for(var i=0;i<parent_paths.length;i++){
-                paths.push(parents[parent].forKey +"/" + parent_paths[i]);
-            }
-        }
-
-        return paths;
-    }
-
-    ab.store.obj.parent.removeParent = function(childUuid,parentObj){
-        if(typeof ab.store.obj.parent.objs[childUuid] == 'undefined'){
-            ab.store.obj.parent.objs[childUuid] = {	parents: {} }
-        }
-        delete ab.store.obj.parent.objs[childUuid].parents[parentObj.uuid]
-    }
-
-    ab.store.obj.parent.getParents = function(childUuid){
-        if(typeof ab.store.obj.parent.objs[childUuid] == 'undefined'){
-            ab.store.obj.parent.objs[childUuid] = {	parents: {} }
-        }
-        return ab.store.obj.parent.objs[childUuid].parents;
-    }
-
-    ab.util.parseOrderFromKey = function(key){
-        return key.slice(0,key.indexOf('_'));
-    }
-
-    ab.util.parsePropertyFromKey = function(key){
-        var key = key.slice(key.indexOf('_')+1);
-        return key.slice(key.indexOf('_')+1);
-    }
-
-    ab.util.parseTypeFromKey = function(key){
-        var key = key.slice(key.indexOf('_')+1);
-        return key.slice(0,key.indexOf('_'));
+        network:{},
+        firing:{},
+        caching:{},
+        graph:{},
+        interface:{},
+        debug:{},
+        errors:{}
     }
 
     ab.util.cutLeadingTrailingSlashes = function(path){
@@ -347,241 +62,6 @@ Appbase = {
         return path.lastIndexOf('/') == -1? '': path.slice(0,path.lastIndexOf('/'));
     }
 
-    ab.auth.login = function (uid,pwd,callback){
-        /*
-        req = new XMLHttpRequest();
-        req.open('POST', 'http://192.168.0.18:3000/');
-        req.setRequestHeader('Content-Type', 'application/json');
-        req.send({'username':uid,'password':pwd});
-        */
-        ab.util.postToUrl('http://192.168.0.18:3000/signup',{'username':uid,'password':pwd})
-    }
-
-
-    ab.store.obj.get.now = function(uuid,createNew,callback){
-        if(typeof createNew == "function"){
-            var callback = createNew;
-            createNew = false;
-        }
-
-        if (typeof ab.store.obj.level1.get(uuid) == 'undefined'){
-
-            if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
-                ab.store.obj.get.noRq[uuid] = [callback];
-            } else {
-                ab.store.obj.get.noRq[uuid].push(callback);
-                return;
-            }
-
-
-            ab.net.listenToUuid(uuid,function(uuid,createNew){
-                return function (err,obj){
-                    var isANewObj = false;
-                    if(!err){
-                        if(!obj)
-                            if(createNew){
-                                var obj = {uuid:uuid,namespace:createNew}
-                                isANewObj = true;
-                            } else {
-                                callback(err,null);
-                                return;
-                            }
-
-                        if(! ab.store.obj.level1.get(uuid)){
-                            var newObj = new AppbaseObj(obj);
-                            ab.store.obj.level1.set(uuid,newObj);
-                            if(isANewObj)
-                                ab.store.obj.put.nowId(uuid);
-                        }
-
-
-                        if(typeof ab.store.obj.get.noRq[uuid] == 'undefined') {
-                            //real patcher
-                            console.log('patching',obj);
-                            ab.store.obj.level1.get(obj.uuid).importFromServer(obj,true);
-                            //TODO: notify updated
-                        } else { //get requests
-                            while(ab.store.obj.get.noRq[uuid].length){
-                                cbc = ab.store.obj.get.noRq[uuid].shift();
-                                cbc(err,ab.store.obj.level1.get(uuid));
-                            }
-                            delete ab.store.obj.get.noRq[uuid];
-                        }
-                    } else {
-                        throw  Error ('error here!')
-                    }
-                }
-
-            }(uuid,createNew));
-        }
-        else{
-            callback(false,ab.store.obj.level1.get(uuid));
-        }
-    }
-
-    ab.store.obj.get.nowPro = Promise.denodeify(ab.store.obj.get.now);
-    ab.store.obj.get.noRq = {};
-
-    ab.store.obj.put.nowId = function (uuid){
-        if(Appbase.debug && Appbase.debug.ignoreServerOut)
-            return;
-
-        if(typeof ab.store.obj.put.q.objs[uuid] == 'undefined')
-            ab.store.obj.put.q.objs[uuid] = true;
-            setTimeout(ab.store.obj.put.q.process,0);
-    }
-
-    ab.store.obj.put.q.isInProcess = false;
-
-    ab.store.obj.put.q.process = function (){
-        if(ab.store.obj.put.q.isInProcess)
-            return;
-
-        for (var uuid in ab.store.obj.put.q.objs){
-            //if(ab.store.obj.put.q.objs[uuid]){
-                ab.store.obj.put.q.objs[uuid] = false;
-                ab.net.putByUuid(ab.store.obj.level1.get(uuid).exportToServer(),function(uuid){
-                    return function(err){
-                        delete ab.store.obj.put.q.objs[uuid];
-                        if(err){
-                            ab.store.obj.put.nowId(uuid);
-                        }
-                    };
-                }(uuid));
-            //}
-        }
-        ab.store.obj.put.q.isInProcess = false;
-    }
-
-    //ab.socket = io.connect('http://192.168.0.18:3000/');
-    ab.socket = io.connect(ab.net.server);
-    //root immortalspectre
-
-    ab.net.listenToUuid = function(uuid, done) {
-
-       ab.socket.emit('get', uuid);
-       ab.socket.on(uuid, function(obj) {
-           if(obj === "false") {
-
-                console.log(uuid+' not found on server');
-                done(false, false);
-           }
-           else {
-                done(false, obj);
-           }
-       });
-    }
-
-    ab.net.listenToProperties = function (path,callback){
-
-    }
-
-    ab.net.listenToNamedEdges = function (path,callback){
-
-    }
-
-    ab.net.listenToOrderedEdges = function(path,callback){
-
-    }
-
-    ab.net.createObj = function(path,callback){
-
-    }
-
-    ab.net.patchProperty = function(path,obj,callback){
-
-    }
-
-    ab.net.destroy = function(path,callback){
-
-    }
-
-    ab.net.patchEdge = function(path,edge,callback){
-
-    }
-
-    ab.net.putByUuid = function(obj, done) {
-        ab.socket.emit('put', obj);
-        done(false);
-    }
-
-    ab.util.clone = function (obj){
-        return JSON.parse(JSON.stringify(obj));
-    }
-
-    ab.util.pathToUuid = function (path,callback,parentUuid){
-        console.log(path);
-        while(path.lastIndexOf('/') == path.length - 1) {
-            path = path.splice(path.length - 1,1);
-        }
-
-        if(path.indexOf('/') < 0){
-            callback("Path invalid.",false);
-            return;
-        }
-
-        var front = ab.util.front(path);
-
-        if(typeof parentUuid == 'undefined'){ //the path is newly asked and is not a recursive call
-
-            var _2nd = ab.util.front(ab.util.cutFront(path));
-            if( path == front+'/'+_2nd){//unique key
-                ab.store.rootpath[_2nd] = path;
-                callback(false,_2nd); //second element is key
-                return;
-            }
-            else{ //fetch front uuid
-                ab.util.pathToUuid(front+'/'+ab.util.front(ab.util.cutFront(path)),function(orgPath,orgCallback){
-                    return function (err,frontUuid){ // for front err = always false
-                        var newPath =  ab.util.cutFront(ab.util.cutFront(path)); //cut front, twice as it was unique obj
-                        ab.util.pathToUuid(newPath,orgCallback,frontUuid);
-                        return;
-                    };
-                }(path,callback));
-            }
-        } else{
-            ab.store.obj.get.now(parentUuid,false,function(orgPath,orgCallback){
-                    return function(err,parentObj){
-                        if(!err){
-                            if(!parentObj){ //path not found
-                                orgCallback(false,false);
-                                return;
-                            } else{
-
-                                if(orgPath == ''){ //we came to the end
-                                    orgCallback(false,parentObj.uuid);
-                                    return;
-                                }
-
-                                var newKey = front;
-
-                                if(typeof parentObj.links[newKey] == 'undefined' ) {
-                                    orgCallback(false,false);
-                                    return;
-                                }
-
-                                var newVal = parentObj.links[newKey];
-
-                                if (typeof newVal == typeof new Object()){
-                                    var newPath = ab.util.cutFront(orgPath); //cut front
-                                    ab.util.pathToUuid(newPath,orgCallback,newVal.uuid);
-                                }
-                                else {
-                                    orgCallback(false,false); //as its a property
-                                }
-                            }
-                        } else{
-                            orgCallback(err,false);
-                            return;
-                        }
-                    };
-            }(path,callback));
-
-        }
-    }
-
-    ab.util.pathToUuidPro = Promise.denodeify(ab.util.pathToUuid);
-
     ab.util.uuid = function (){
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
@@ -589,447 +69,1031 @@ Appbase = {
         });
     }
 
-    ab.util.isNumber = function (n) {
-      return !isNaN(parseFloat(n)) && isFinite(n);
+    ab.util.timestamp = function(){
+        return (new Date()).getTime();
     }
 
-    var AppbaseObj = function (obj){
+    ab.network.init = function() {
+        ab.network.server = 'http://162.242.213.228:3000/';
+        ab.network.socket = io.connect(ab.network.server);
 
-        this.links = {};
+        var listenToUuid = function(uuid) {
+            //add deduplication of listening
+            ab.network.socket.emit('get', uuid);
+            ab.network.socket.on(uuid, function(obj) {
+                obj = (obj == 'false'?false:obj);
 
-        this.linksOrdered = [];
-        this.changed = {};
-        this.properties = {};
-        this.timestamp = null;
+                !obj &&  amplify.publish('fromServer:data_not_found', false,uuid);
 
-        this.importFromServer(obj);
-    }
+                obj &&  obj && amplify.publish('fromServer:data_arrived', false,uuid,obj);
 
-    AppbaseObj.prototype.exportProps = function(){
-        return ab.util.clone(this.properties);
-    }
-
-    ab.util.uuidToValuePro = function(uuid){
-        return ab.store.obj.get.nowPro(uuid)
-            .then(function(obj){
-                return Promise.resolve(obj.exportProps());
+                amplify.publish('fromServer:'+uuid, false,uuid,obj);
             });
-    }
-
-    AppbaseObj.prototype.importFromServer = function(obj,isNew,dontFire){
-        //var fireNewValue = false;
-
-        var oldVal = null;
-        if(!isNew) {
-            this.uuid = obj.uuid;
-            //this.namespace = obj.namespace;
-        } else {
-            oldVal = this.exportProps();
         }
 
-        obj.timestamp && (this.timestamp = obj.timestamp);
-        obj.properties && (this.properties = JSON.parse(obj.properties));
+        var putByUuid = function(obj) {
+            ab.network.socket.emit('put', obj);
+            amplify.publish('fromServer:data_pushed',false,obj.id);
+        }
 
-        /*
-        delete obj["namespace"];
-        delete obj["uuid"];
-        delete obj['changed'];
+        amplify.subscribe('toServer:listen_to_data',function(uuid){
+            listenToUuid(uuid);
+        });
 
-        for (var newLink in obj){
-            var type = ab.util.parseTypeFromKey(newLink);
-            var order = ab.util.parseOrderFromKey(newLink);
-            var prop = ab.util.parsePropertyFromKey(newLink);
-            var val = obj[newLink];
+        amplify.subscribe('toServer:push_data',function(obj){
+            putByUuid(obj);
+        });
 
-            if(isNew)
-                newProps[prop] = true;
+    }
 
-            if (type == typeof new Object()){
-                var uuid = val;
-                val = {
-                    uuid: uuid
+    ab.caching.init = function(){
+        ab.caching.inMemory = {
+        };
+
+        var keyValFromArgs = function(prefix,key,val){
+            if(typeof val == 'undefined'){
+                var val = key;
+                key = prefix;
+            } else {
+                key = prefix+':'+key;
+            }
+
+            return {key:key,val:val}
+        }
+
+        var keyFromArgs = function(prefix,key){
+            if(!key){
+                var key = prefix;
+            } else {
+                key = prefix+':'+key;
+            }
+
+            return key;
+        }
+
+        ab.caching.get = function(prefix,key){
+            var key = keyFromArgs(prefix,key);
+
+            if(!key){
+                throw 'Invalid arguments for getting from cache.'
+            }
+
+            if(ab.caching.inMemory[key]){
+                return {val:Object.clone(ab.caching.inMemory[key]),isFresh:true}
+            } else {
+                var fromPersistent = amplify.store(key);
+                if(fromPersistent){
+                    ab.caching.inMemory[key] = fromPersistent;
+                    return {val:Object.clone(fromPersistent),isFresh:false};
+                } else {
+                    return {isFresh:false};
+                }
+            }
+        }
+
+        ab.caching.set = function(prefix,key,val){
+            var key_val = keyValFromArgs(prefix,key,val);
+            var key = key_val.key;
+            var val = key_val.val;
+
+            if(!key){
+                throw 'Invalid arguments for setting the cache.'
+            }
+
+            ab.caching.inMemory[key] = val;
+
+            if(val == undefined){
+                amplify.store(key,null);
+            } else {
+                amplify.store(key,val);
+            }
+        }
+
+        ab.caching.clear = function(prefix,key){
+            var key = keyFromArgs(prefix,key);
+
+            if(key){
+                ab.caching.set(key,undefined); //clear
+            } else {
+                ab.caching.inMemory = {}; //clear
+                var key_values = amplify.store();
+                for(var key in key_values){
+                    amplify.store(key,null); //clear
                 }
             }
 
-            if(!isNew || typeof this.links[prop] == 'undefined')
-                fireNewValue = true;
-                this.insert(prop,val,order,true);
-        }
-        */
-        if(isNew && ! dontFire){
-            /*
-            for (var prop in this.links)
-                if (! newProps[prop])
-                    fireNewValue = true;
-                    this.remove(prop,true);
-            */
-            //if(fireNewValue){
-                ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
-            //}
         }
 
     }
 
-    AppbaseObj.prototype.exportToServer = function(){
-        var obj = {uuid:this.uuid};
-        //obj.namespace = this.namespace;
-        obj.timestamp = this.timestamp;
-        obj.properties = JSON.stringify(this.properties);
-        //this.linksOrdered = this.linksOrdered.filter(function(n){ return n != undefined })
+    ab.graph.init = function(){
+        ab.graph.storage = {};
 
-        /*for (var i = 0;i< this.linksOrdered.length;i++){
-            var prop = this.linksOrdered[i];
-            var key = i.toString()+'_' + typeof this.links[prop]+ '_' + prop;
-            obj[key] = this.links[prop];
-        }*/
+        ab.graph.storage.get = function(what,key,extras){
 
-        return obj;
-    }
-
-    AppbaseObj.prototype.addProp = function(prop,val,callback){
-        this.properties[prop] = val;
-
-        var oldVal = this.exportProps();
-        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
-
-        ab.store.obj.put.nowId(this.uuid);
-    }
-
-    AppbaseObj.prototype.removeProp = function(prop,callback){
-        delete this.properties[prop];
-
-        var oldVal = this.exportProps();
-        ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:oldVal});
-
-        ab.store.obj.put.nowId(this.uuid);
-    }
-
-    AppbaseObj.prototype.insert = function(prop,val,order,isRemote){
-
-        var oldSelfVal = this.exportProps();
-        var oldObjVal = this.links[prop];
-        if (typeof oldObjVal == 'undefined')
-            oldObjVal = null;
-        else if(typeof oldObjVal == typeof new Object()){
-
-            if(typeof ab.store.obj.level1.get(oldObjVal.uuid) != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
-                oldObjVal = ab.store.obj.level1.get(oldObjVal.uuid).exportProps();
-            } else {
-                oldObjVal = null;
-            }
-        }
-        this.links[prop] = val;
-        if (typeof val == typeof new Object())
-            ab.store.obj.parent.addParent(val.uuid,this,prop);
-
-        //handle ordering
-        var oldIndex = this.linksOrdered.indexOf(prop);
+            return new Promise(function(resolve,reject){
 
 
-        console.log(this.links,prop,'old',oldIndex);
+                var cached = ab.caching.get(what,key);
 
-        if(oldIndex >= 0){
-            if(typeof order == 'undefined' ){
-                var order = oldIndex;
-            }
-
-            this.linksOrdered.splice(oldIndex,1);
-
-        } else if(typeof order == 'undefined'){
-            var order = 0;
-        }
-
-        if (order < 0){
-            order = this.linksOrdered.length + order + 1;
-        }
-
-        if(typeof this.linksOrdered[order] == 'undefined')
-            this.linksOrdered[order] = prop;
-        else
-            this.linksOrdered.splice(order,0,prop);
-
-        if(oldIndex >= 0){ //object already exits
-            if(!isRemote || this.changed[prop]){ //changed locally or change is specified from server
-
-                var data = {
-                    uuid:(typeof val == typeof new Object()?val.uuid:null),
-                    val: (typeof val == typeof new Object()?undefined:val),
-                    prevVal:oldObjVal,
-                    index:order,
-                    prevIndex:oldIndex,
-                    name:prop
-                };
-
-                ab.events.fireIntern({event:ab.events.types.intern.object_changed,onId:this.uuid,goUp: (! isRemote)},data);
-                console.log('changed')
-
-                if(isRemote)
-                    delete this.changed[prop];
-                else
-                    this.changed[prop] = true;
-            }
-
-        } else {
-            if(!isRemote)
-                ab.events.fireIntern({event:ab.events.types.intern.object_added,onId:this.uuid,goUp: (! isRemote)},{uuid:(typeof val == typeof new Object()?val.uuid:null),val: (typeof val == typeof new Object()?undefined:val),prevVal:null,index:0,prevIndex:null,name:prop});
-        }
-
-        if(!isRemote){
-            ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,prevVal:oldSelfVal,val:this.exportProps()});
-            ab.store.obj.put.nowId(this.uuid);
-        }
-
-    }
-
-
-    AppbaseObj.prototype.remove = function(prop,isRemote){
-        var selfVal = this.exportProps();
-        var val = this.links[prop];
-        if (typeof val == 'undefined'){
-            console.log('removing undefined prop!');
-            return;
-        } else if(typeof val == typeof new Object()){
-            var objUuid = val.uuid;
-            if(typeof ab.store.obj.level1.get(val.uuid) != 'undefined'){ // shouldn't call get now, as the oldObjVal has to be local
-                val = ab.store.obj.level1.get(val.uuid).exportProps();
-            } else {
-                val = null;
-            }
-        }
-
-        delete this.links[prop];
-
-        var order = this.linksOrdered.indexOf(prop);
-        this.linksOrdered.splice(order,1);
-
-        if(typeof val == typeof new Object())
-            ab.store.obj.parent.removeParent(objUuid,this);
-
-        ab.events.fireIntern({event:ab.events.types.intern.object_removed,onId:this.uuid},{uuid:(typeof val == typeof new Object()?objUuid:null),val:null,index:null,prevVal:val,prevIndex:order});
-
-        if(!isRemote){
-            ab.events.fireIntern({event:ab.events.types.intern.value,onId:this.uuid},{uuid:this.uuid,val:this.exportProps(),prevVal:selfVal});
-            ab.store.obj.put.nowId(this.uuid);
-        }
-    }
-
-    AppbaseRef = function(path,dontFetch){
-        //TODO: reference to a property
-        var toHide = {
-            isAPath: false
-        };
-        var toExport = {};
-
-        //define prototypes
-        toHide._path = path;
-        toHide.refId = ab.util.uuid(); //this uuid is used to make this ref a unique identity, which will be used to add/remove listeners
-
-        toHide.uuidPro = function(){
-            return ab.util.pathToUuidPro(toHide._path);
-        }
-
-        toHide.uuid = function(callback){
-            ab.util.pathToUuid(toHide._path,callback);
-        }
-
-
-        toExport.on = function(event,fun){
-            //TODO: options
-            if(! ab.events.types.extern[event] ){
-                throw new Error("Invalid event.");
-                return toExport;
-            }
-
-            ab.events.initForPath(toHide._path);
-
-            //bring the object
-            var uid;
-            toHide.uuidPro()
-                .then(function(uuid){
-                    uid = uuid;
-                    return ab.store.obj.get.nowPro(uuid);
-                }).then(function(obj){
-                    var eventData = {
-                        event: event,
-                        onId: uid,
-                        callback:fun,
-                        paths: [toHide._path]
-                    }
-
-                    switch(event){
-
-                        case ab.events.types.extern.value:
-                            var data = { val: obj.exportProps(),
-                                prevVal: null,
-                                uuid: uid,
-                                prevIndex:null
-                            }
-
-                            ab.events.fireExtern(eventData,data);
-                            ab.store.listeners[toHide._path][event][toHide.refId] = fun;
-                            break;
-                        case ab.events.types.extern.object_added:
-                            var promises = [];
-                            for(var i=0;i<obj.linksOrdered;i++) {
-                                if(obj.linksOrdered != undefined){
-                                    var val = obj.links[obj.linksOrdered[i]];
-                                    if(typeof val == typeof new Object()){
-                                        promises.push(ab.store.obj.get.nowPro(val.uuid));
-                                    }
-                                }
-                            }
-
-                            Promise.all(promises).then(function(){
-                                for(var i=0;i<obj.linksOrdered.length;i++) {
-                                    var val = obj.links[obj.linksOrdered[i]];
-                                    var data = {
-                                        prevVal: null,
-                                        name: obj.linksOrdered[i],
-                                        prevIndex:null,
-                                        index:i
-                                    }
-                                    if(typeof val == typeof new Object()){
-                                        data.uuid = val.uuid;
-                                    } else {
-                                        data.uuid = null,
-                                            data.val = val
-                                    }
-                                    ab.events.fireExtern(eventData,data);
-                                }
-
-                                ab.store.listeners[toHide._path][event][toHide.refId] = fun;
-                            })
-
-                            break;
-                        default:
-                            ab.store.listeners[toHide._path][event][toHide.refId] = fun;
-                            break;
-                    }
-                },function(error){
-                    console.log(error);
-                })
-
-            return toExport;
-
-        }
-
-        toExport.off = function(event){
-            ab.events.initForPath(toHide._path);
-            if(event)
-                delete ab.store.listeners[toHide._path][event][toHide.refId];
-            else
-                for(var event in ab.store.listeners[toHide._path])
-                    delete ab.store.listeners[toHide._path][event][toHide.refId];
-
-            return toExport;
-        }
-
-        toExport.insert = function(prop,val){
-            var promises = [];
-            promises.push(toHide.uuidPro().then(function(uuid){return ab.store.obj.get.nowPro(uuid)}));
-
-            if(typeof val == typeof new Object()){ //TODO: check for AppbaseReference
-                promises.push(val.uuidPro());
-            }
-
-            Promise.all(promises)
-                .then(function(arr){
-                    if(arr.length == 2)
-                        val = { uuid: arr[1] } ;
-
-                    arr[0].insert(prop,val);
-                });
-
-            return toExport;
-        }
-
-        toExport.remove= function(prop){
-            ab.util.pathToUuidPro(toHide._path)
-                .then(function(uuid){
-                    return ab.store.obj.get.nowPro(uuid);
-                })
-                .then(function(obj){
-                    obj.remove(prop);
-                });
-
-            return toExport;
-        }
-
-
-        toExport.path = function(){
-            return toHide._path;
-        }
-
-        //init
-        if (toHide._path == ab.util.front(toHide._path)){
-            toHide._path = toHide._path+"/"+ab.util.uuid();
-        }
-
-        if(ab.util.cutFront(ab.util.cutFront(path)).indexOf('/')>=0){
-            toHide.isAPath = true;
-        }
-
-        if(dontFetch) {
-            //light weight
-        } else {
-            toHide.uuid(function(path,isAPath){
-                return function(err,uuid){
-                    if(uuid){
-                        if(isAPath){
-                            ab.store.obj.get.now(uuid,false,function(err,obj){ if(!obj) throw new Error(path+": Path doesn't exist");});
+                switch(what){
+                    case 'path_uuid':
+                        if(cached.val){
+                            resolve(cached.val);
                         } else {
-                            ab.store.obj.get.now(uuid,ab.util.front(path),function(){});
+
+                            /*TODO: fetch from server
+                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                             error && reject(error);
+
+                             obj && resolve(ab.caching.inMemory[uuid]);
+                             !obj && resolve(false);
+
+                             amplify.unsubscribe(topic,listenerName);
+                             })
+                             */
+
+                            reject(ab.errors.vertex_not_found) //for now, as server is not available
+                            return;
                         }
-                    } else{
-                        throw new Error(path+": Path doesn't exist");
+                        //todo: cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'uuid_vertex':
+                        if(cached.val){
+                            resolve(cached.val);
+                        } else {
+                            /*TODO: fetch from server, according to timestamp
+                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
+                             error && reject(error);
+
+                             obj && resolve(ab.caching.inMemory[uuid]);
+                             !obj && resolve(false);
+
+                             amplify.unsubscribe(topic,listenerName);
+                             })
+                             */
+
+                            reject(ab.errors.vertex_not_found); //for now, as server is not available
+                            return;
+                        }
+                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'path_vertex':
+
+                        ab.graph.storage.get('path_uuid',key)
+                            .then(function(uuid){
+
+                                if(!extras)
+                                    var extras = {};
+
+                                extras.path = key;
+
+                                return ab.graph.storage.get('uuid_vertex',uuid,extras);
+                            })
+                            .then(function(vertex){
+
+                                ab.caching.clear("creation",key);
+                                resolve(vertex);
+
+                            },function(error){
+
+                                if(error == ab.errors.vertex_not_found && ab.caching.get("creation",key).val){
+                                    //Vertex creation
+                                    //TODO: serverside creation of UUIDs for new objects
+                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true}).then(function(){
+                                        ab.caching.clear("creation",key);
+                                        return ab.graph.storage.get('path_vertex',key);
+                                    }).then(resolve,reject);
+
+                                } else {
+                                    reject(error);
+                                }
+                            });
+                        break;
+
+                    case 'uuid_edges':
+                        /*TODO: fetch from server, according to timestamp, startAT, endAt and then return data from cache */
+
+                        if(cached.val){
+                            cached.val.highestPriority = cached.val.highestPriority != null? cached.val.highestPriority:-Infinity;
+                            cached.val.lowestPriority = cached.val.lowestPriority != null? cached.val.lowestPriority:Infinity;
+
+                            resolve(cached.val);
+                        } else {
+                            resolve ({byName:{},byPriority:{},highestPriority:-Infinity,lowestPriority:+Infinity}); //empty object, as server is not available, and the assumption is path_uuid exists, but there are no edges for this uuid.
+                        }
+
+                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+                        break;
+
+                    case 'path_edges':
+                        ab.graph.storage.get('path_vertex',key)
+                            .then(function(vertex){
+                                if(!extras)
+                                    var extras = {};
+
+                                extras.path = key;
+
+                                return ab.graph.storage.get('uuid_edges',vertex.uuid,extras).then(function(edges){
+                                    edges.uuid = vertex.uuid;
+                                    return Promise.resolve(edges);
+                                });
+                            }).then(resolve,reject);
+                        break;
+
+                }
+            })
+        }
+
+        ab.graph.storage.set = function(what,key,val,extrasArgs){
+
+            return new Promise(function(resolve,reject){
+
+                var extras = extrasArgs?extrasArgs:{};
+
+                switch(what){
+                    case 'uuid_path':
+                        /*expected string*/
+                        if(typeof val != "string"){
+                            reject('UUID must be a string');
+                            return;
+                        }
+
+                        var cached = ab.caching.get(what,key);
+
+                        if(!cached.val){
+                            cached.val = {};
+                        }
+
+                        cached.val[val] = true;
+
+                        ab.caching.set(what,key,cached.val);
+                        resolve();
+
+                        break;
+
+                    case 'path_uuid':
+                        /*expected string*/
+                        if(typeof val != "string"){
+                            reject ('UUID must be a string');
+                            return;
+                        }
+
+                        ab.caching.set(what,key,val);
+                        ab.graph.storage.set('uuid_path',val,key).then(resolve,reject);
+
+                        break;
+
+                    case 'uuid_vertex':
+
+                        /*
+                         obj expected:
+                         {
+                         timestamp: blah,
+                         properties: {
+                         }
+
+                         }
+                         */
+
+
+                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                            reject ('Object not valid. 1');
+                            return;
+                        }
+
+
+                        var cached = ab.caching.get(what,key);
+                        var storedVertex = cached? cached.val:undefined;
+
+                        if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
+                            resolve(); //ignore
+                            return;
+                        }
+
+                        if(extras.patch && storedVertex){
+                            for(var prop in val.properties){
+                                val.properties[prop] == null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+                            }
+
+                            val = storedVertex;
+                        }
+
+                        //todo: preserve server's version, with a timestamp
+                        val.prev = ab.caching.get(what,key).val;
+                        val.prev && delete val.prev.prev; //delete older state
+
+                        ab.caching.set(what,key,val);
+
+                        resolve();
+
+
+                        val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
+
+                        break;
+
+
+                    case 'path_vertex':
+                        /*
+                         obj expected:
+                         {
+                         timestamp: blah,
+                         properties: {
+                         }
+
+                         }
+                         */
+
+                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                            reject ('Object not valid. 3');
+                            return;
+                        }
+
+                        extras.path = key;
+
+                        var storeNow = function(){
+
+                            if(!val.uuid){
+                                ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                                    ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
+                                },reject);
+
+                            } else {
+                                ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
+                                    ab.graph.storage.set('uuid_vertex',val.uuid,val,extras).then(resolve,reject);
+                                },reject);
+
+
+                            }
+                        }
+
+                        if(typeof extras.shouldExist != 'undefined' ){
+                            ab.graph.storage.get('path_vertex',key,extras)
+                                .then(function(storedVertex){
+
+                                    if(extras.shouldExist){
+                                            storeNow();
+                                    }
+                                    else {
+                                        reject("Vertex already exists.")
+                                    }
+                                },function(error){
+
+                                    if(!extras.shouldExist && error == ab.errors.vertex_not_found ){
+                                        storeNow();
+                                    }
+                                    else {
+                                        reject(error);
+                                    }
+                                });
+                        } else {
+                            storeNow();
+                        }
+
+
+
+                        //TODO: fire
+                        break;
+
+                    case 'uuid_edges':
+
+                        /*
+                         obj expected:
+                         {
+                         'linkName': {
+                         priority: 0,
+                         timestamp: 'yo',
+                         data: {
+                         uuid: blah,
+                         timestamp: blah,
+                         properties: {
+                         }
+                         }
+                         }
+
+                         }
+                         */
+
+                        var storeNow = function(){
+
+                            var toBeFired = [];
+                            var cached = ab.caching.get(what,key);
+                            var storedByName = cached.val? cached.val.byName:null;
+                            var storedByPriority = cached.val?cached.val.byPriority:{};
+                            var lowestPriority = cached.val && cached.val.lowestPriority != null ? cached.val.lowestPriority:+Infinity;
+                            var highestPriority = cached.val && cached.val.highestPriority != null  ? cached.val.highestPriority:-Infinity;
+
+                            var setHighLow = function(prio){
+
+                                if(typeof prio != 'number' ){
+                                    reject( "Internal Error - while setting priority");
+                                }
+
+                                if(prio > highestPriority){
+                                    highestPriority = prio;
+                                }
+
+                                if(prio < lowestPriority){
+                                    lowestPriority = prio;
+                                }
+                            }
+
+                            /*
+                            format:
+                            {
+                                byName: {
+                                    'linkName': {
+                                        priority: 0,
+                                        timestamp: 'yo'
+                                    }
+                                }
+
+                                byPriority: {
+                                    prio: [sorted names]
+                                }
+                            }
+                            */
+
+                            if(extras.patch && storedByName){
+                                for(var edgeName in val){
+                                    //TODO: timestamps, if no priority given in the local, server-timestamp is the priority
+
+                                    if(val[edgeName] && val[edgeName].priority == "time"){
+                                        val[edgeName].priority = val[edgeName].timestamp;
+                                    }
+
+                                    if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
+
+                                        if(val[edgeName] && val[edgeName].priority == undefined){
+                                            val[edgeName].priority = storedByName[edgeName].priority;
+                                        }
+
+                                        if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority){ //todo: 1)server delete flag 2)//todo: check for uuids
+                                            //remove edge
+                                            toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: vertex
+
+                                            ab.caching.clear('path_uuid',extras.path+'/'+edgeName);
+                                            //todo: in edge for edge uuid
+
+                                            var priority = storedByName[edgeName].priority;
+                                            storedByPriority[priority].splice(storedByPriority[priority].indexOf(edgeName),1);
+                                            delete storedByName[edgeName];
+
+                                            if(priority == lowestPriority){
+                                                lowestPriority = Infinity;
+                                            }
+
+                                            if(priority == highestPriority){
+                                                highestPriority = -Infinity;
+                                            }
+
+
+
+                                        } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
+
+                                            toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: 1) vertex 2) attach priority data
+
+                                            var oldPriority = storedByName[edgeName].priority;
+                                            storedByPriority[oldPriority].splice(storedByPriority[oldPriority].indexOf(edgeName),1);
+
+                                            var newPriority = val[edgeName].priority;
+                                            storedByName[edgeName].priority = newPriority;
+
+                                            if(!storedByPriority[newPriority]){
+                                                storedByPriority[newPriority] = [];
+                                            }
+
+                                            storedByPriority[newPriority].push(edgeName);
+                                            storedByPriority[newPriority].sort();
+
+                                            setHighLow(newPriority);
+
+                                            if(oldPriority == lowestPriority){
+                                                lowestPriority = Infinity;
+                                            }
+
+                                            if(oldPriority == highestPriority){
+                                                highestPriority= -Infinity;
+                                            }
+
+                                            delete val[edgeName];
+
+                                        } else {
+                                            //it should not end up here
+                                            reject('Edge data wrong');
+                                            return;
+                                        }
+                                    }
+
+                                }
+
+                                // the only edges left are newly added
+                            }
+
+                            for(var edgeName in val){
+                                if(!val[edgeName]) // todo: server delete flag
+                                    continue;
+
+                                if(val[edgeName].priority == undefined){
+                                    val[edgeName].priority = val[edgeName].timestamp;
+                                }
+
+                                if(val[edgeName].data){
+                                    var path = extras.path+'/'+edgeName;
+                                    var vertex = val[edgeName].data;
+
+                                    ab.graph.storage.set('path_vertex',path,vertex);
+                                }
+
+                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]);
+
+                                delete val[edgeName].data;
+
+                                if(extras.patch && storedByName)
+                                    storedByName[edgeName] = val[edgeName];
+
+                                if(!storedByPriority[val[edgeName].priority]){
+                                    storedByPriority[val[edgeName].priority] = [];
+                                }
+
+                                storedByPriority[val[edgeName].priority].push(edgeName);
+                                storedByPriority[val[edgeName].priority].sort();
+
+
+                                setHighLow(val[edgeName].priority);
+
+                                //TODO: in edges
+                            }
+
+                            if(lowestPriority == +Infinity || highestPriority == -Infinity){
+                                for(var prio in storedByPriority){
+
+                                    if(storedByPriority[prio].length){
+                                        setHighLow(parseInt(prio));
+                                    }
+                                }
+                            }
+
+                            ab.caching.set(what,key,{
+                                byName: (extras.patch && storedByName)?storedByName:val,
+                                byPriority: storedByPriority,
+                                lowestPriority:lowestPriority,
+                                highestPriority:highestPriority
+                            });
+
+                            resolve();
+
+                            toBeFired.forEach(function(args){
+                                ab.firing.fire.apply(null,args);
+                            });
+
+                        }
+
+                        if(extras.shouldExist){
+                            ab.graph.storage.get('uuid_vertex',key,extras)
+                                .then(function(storedVertex){
+                                    if(storedVertex){
+                                        storeNow();
+                                    } else {
+                                        reject("Vertex not found.")
+                                        return;
+                                    }
+
+                                },reject);
+                        } else {
+                            storeNow();
+                        }
+
+
+                        break;
+
+                    case 'path_edges':
+                        /*
+                         obj expected:
+
+
+                         {
+                         'linkName': {
+
+                         timestamp: 'yo',
+                         data: {
+                         uuid: blah,
+                         timestamp: blah,
+                         properties: {
+                         }
+                         }
+                         }
+
+                         }
+
+                         */
+
+                        if(typeof val != "object"){
+                            reject ('Object not valid. 4');
+                            return;
+                        }
+
+                        if(!extras)
+                            var extras = {};
+
+                        extras.path = key;
+
+                        if(!val.uuid){
+                            ab.graph.storage.get('path_vertex',key).then(function(vertex){
+
+                                ab.graph.storage.set('uuid_edges',vertex.uuid,val,extras).then(resolve,reject);
+                            },reject);
+
+                        } else {
+
+                            ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
+                                ab.graph.storage.set('uuid_edges',val.uuid,val,extras).then(resolve,reject);
+                            },reject);
+
+
+                        }
+
+                        break;
+
+                    default :
+                        reject('What to set?');
+                        return;
+
+                }
+            })
+        }
+
+        ab.graph.path_vertex = {
+            get:function(path,extras){
+                return ab.graph.storage.get('path_vertex',path);
+            },
+            getSync: function(path){
+                return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_vertex',ab.caching.get('path_uuid',path).val) : undefined;
+            },
+            set: function(path,vertex,extras){
+                if(!extras)
+                    extras = {};
+
+                return ab.graph.storage.set('path_vertex',path,vertex,extras);
+            }
+        };
+
+        ab.graph.path_out_edges = {
+            get:function(path){
+                return ab.graph.storage.get('path_edges',path);
+            },
+            getSync: function(path){
+                return ab.caching.get('path_uuid',path).val && ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val)? ab.caching.get('uuid_edges',ab.caching.get('path_uuid',path).val) : {};
+            },
+            set: function(path,edges,extras){
+
+                return new Promise(function(resolve,reject){
+
+
+                    var handleServer = function(){
+                        resolve();
+                        //TODO: server, resolve,reject, timestamping
+                    };
+
+                    var stepTwo = function(){
+                        if(newEdge.target){
+                            ab.graph.path_vertex.get(edgePath)
+                                .then(function(edgeVertex){
+                                    edges[edgeName] = {
+                                        timestamp: ab.util.timestamp(),
+                                        priority: priority,
+                                        data:edgeVertex
+                                    };
+
+                                    ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                                },reject);
+                        } else { //deletion
+                            edges[edgeName] = null;
+                            ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
+                        }
                     }
-                };
-            }(toHide._path,toHide.isAPath));
+
+                    if(extras.isLocal){
+                        /*
+                         expected when local
+                         edges: {
+                            edgeName: 'name',
+                            target: appbase ref,
+                            priority: priority
+                         }
+                         */
+                        //todo: validation
+
+                        var newEdge = edges;
+                        edges = {};
+                        var edgeName = newEdge.name;
+                        var edgePath = newEdge.ref? newEdge.ref.path():null;
+                        var priority = newEdge.priority;
+
+                        if(!edgeName && !edgePath){
+
+                            reject('Invalid arguments');
+                            return;
+                        }
+
+                        if(!edgeName){
+
+                            ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                edgeName = vertex.uuid;
+                                stepTwo();
+                            },reject);
+                        } else {
+                            stepTwo();
+                        }
+
+
+                    } else { //server data has changed
+                        ab.graph.storage.set('path_edges',path,edges,extras).then(resolve,reject);
+                    }
+                });
+            }
         }
 
-        if(Appbase.debug){
-            toExport.toHide = toHide;
-        }
+        ab.graph.path_in_edge_paths = {
+            get:function(path){
+                return ab.graph.storage.get('path_in_edge_paths',path);
+            }
+        };
 
-        //return closure
-        return toExport;
+        ab.graph.uuid_paths = {
+            getSync:function(uuid){
+                var cached = ab.caching.get('uuid_path',uuid);
+                return cached.val?cached.val:{};
+            }
+        }
     }
 
-    //Exposing only a few functions
-    Appbase.ref = function(arg,dontFetch){
-        if (Appbase.debug && Appbase.debug.ignoreGlobals)
-            return;
+    ab.firing.init = function(){
 
-        return AppbaseRef(arg,dontFetch);
+        ab.firing.snapshot = function(vertex){
+            var exports = {};
+
+            exports.properties = function(){
+                return vertex.properties;
+            }
+
+            exports.prevProperties = function(){
+                return vertex.prev?vertex.prev.properties:null;
+            }
+
+            return exports;
+        }
+
+        ab.firing.fire = function(event,uuid,vertex,extras){
+            var ref;
+
+            var paths = ab.graph.uuid_paths.getSync(uuid);
+            for(var path in paths){
+
+                switch(event){
+
+                    case "properties":
+                        ref  = Appbase.ref(path,true);
+                        break;
+
+                    case "edge_added":
+                    case "edge_removed":
+                    case "edge_changed":
+                    case "edge_moved":
+                        ref  = Appbase.ref(path+'/'+extras.edgeName,true);
+                        break;
+
+                    default:
+                        throw ('Wrong event.');
+
+                }
+
+                amplify.publish(event+':'+path,false,ref,ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
+            };
+        }
+
+        ab.firing.properties = {};
+        ab.firing.properties.on = function(path,name,callback){
+            var listenerName = amplify.subscribe('properties:'+path,name,callback);
+
+            ab.graph.path_vertex.get(path)
+            .then(function(vertex){
+                callback(false,Appbase.ref(path,true),ab.firing.snapshot(vertex));
+
+            },function(error){
+                amplify.unsubscribe('properties:'+path,listenerName);
+                callback(error);
+            });
+
+        }
+
+        ab.firing.properties.off = function(path,name){
+            return amplify.unsubscribe('properties:'+path,name); // todo: stop listening, clear from RAM
+        }
+
+        ab.firing.edges = {};
+
+        ab.firing.edges.on = function(event,path,name,options,callback){
+            //todo: check event
+            if(typeof name == "function" && callback == undefined && options==undefined){
+                var callback = name;
+                name = undefined;
+            } else if(callback == undefined && typeof options == "function" && typeof name == "string"){
+                var callback = options;
+                options = undefined;
+            } else if(callback == undefined && typeof options == "function" && typeof name == "object") {
+                var callback = options;
+                options = name;
+                name = undefined;
+            } else {
+                throw "Invalid arguments."
+            }
+
+            var listenerName = amplify.subscribe(event+':'+path,name,callback);
+
+            ab.graph.path_out_edges.get(path)  //TODO: provide startAt,endAt
+            .then(function(edges){
+                    if(event == "edge_added"){
+                        //fire for existing edges
+
+                        var startAt = typeof options.startAt == 'number'? options.startAt:edges.lowestPriority; //todo: how to get the least priority?
+                        var endAt = typeof options.endAt == 'number'? options.startAt:edges.highestPriority; //todo: how to get the least priority?
+
+                        //todo: reverse, skip
+
+                        for(var i=startAt; (i<= endAt) && startAt != +Infinity && endAt!= -Infinity ;i++){ //todo: endAt inclusive or exlusive, if exlusive, endAt at max prio doesnt work
+                            if(edges.byPriority[i]){
+
+                                edges.byPriority[i].forEach(function(edgeName){
+                                    var edgePath = path+edgeName;
+
+                                    if(options && options.noData){
+                                        callback(false,Appbase.ref(edgePath,true));
+                                    } else {
+                                        ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                            callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
+                                        },callback);
+                                    }
+                                })
+                            }
+                        }
+
+                    } else if (event == 'edge_changed'){
+                        //todo: think: need anything special?
+                    }
+
+            },function(error){
+                amplify.unsubscribe(event+':'+path,listenerName);
+                callback(error);
+            });
+        }
     }
 
-    Appbase.create = function(namespace,key){
-        if(arguments.length >2){
-            throw "Expected only two arguments: namespace and key";
+    ab.interface.init = function(){
+
+        ab.interface.ref_obj = function(path,lite){
+
+            var priv = {};
+            var exports = {
+                properties:{},
+                edges:{}
+            };
+
+            priv.path = ab.util.cutLeadingTrailingSlashes(path);
+
+            exports.path = function(){
+                return priv.path;
+            }
+
+            exports.out = function(edgeName){
+                return ab.interface.ref_obj(priv.path + '/' +edgeName,true);
+            }
+
+            exports.in = function(){
+                return ab.interface.ref_obj(ab.util.cutBack(priv.path),true);
+            }
+
+            exports.properties.add = function(prop,val,localCallback){
+                var vertex = {properties:{}};
+                vertex.properties[prop] = val;
+                vertex.timestamp = ab.util.timestamp();
+
+                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+                    localCallback && localCallback(false);
+                },localCallback ? localCallback: function(error){
+                    throw error;
+                });
+            }
+
+            exports.properties.commit = function(prop,apply,localCallback){
+                //todo:
+            }
+
+            exports.properties.remove = function(prop,localCallback){
+                var vertex = {properties:{}};
+                vertex.properties[prop] = null;
+                vertex.timestamp = ab.util.timestamp();
+
+                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+                    localCallback && localCallback(false);
+                },localCallback ? localCallback: function(error){
+                    throw error;
+                });
+            }
+
+            exports.destroy = function(localCallback){
+                //TODO:
+            }
+
+            exports.edges.add = function(args,callback){
+                if(args.ref && args.ref.path()){
+                    args.target = args.ref.path();
+                } else {
+                    callback('Invalid arguments');
+                }
+
+                ab.graph.path_out_edges
+                    .set(priv.path,args,{isLocal:true,patch:true,shouldExist:true})
+                    .then(function(){
+                            callback(false); //todo: ref and snap
+                        },callback);
+
+            }
+
+            exports.edges.remove = function(args,callback){
+
+                if(!((args.ref && args.ref.path()) || args.name)){
+                    callback('Invalid arguments');
+                }
+
+                args.target = null; //delete
+
+                ab.graph.path_out_edges.set(priv.path,args,{isLocal:true,patch:true,shouldExist:true}).then(function(){
+                    callback(false);// todo: ref and snap
+                },callback);
+            }
+
+            exports.edges.on = function(event,name,options,callback){
+                return ab.firing.edges.on(event,priv.path,name,options,callback);
+            }
+
+            exports.properties.on = function(name,callback){
+                return ab.firing.properties.on(priv.path,name,callback);
+            }
+
+            exports.properties.off = function(name){
+                return ab.firing.properties.off(priv.path,name);
+            }
+
+            return exports;
+
+        }
+
+        ab.interface.global = {};
+
+        ab.interface.global.create = function(collection,key){
+            if(!key){
+              var key = ab.util.uuid();
+            }
+
+            ab.caching.set('creation',collection+'/'+key,true);
+
+            return ab.interface.ref_obj(collection+'/'+key);
+        }
+
+        ab.interface.global.ref = ab.interface.ref_obj;
+
+        Appbase.create = ab.interface.global.create;
+        Appbase.ref = ab.interface.global.ref;
+    }
+
+    ab.debug.init = function(){
+        if(!Appbase.debug){
+            delete Appbase.debug;
             return;
         }
 
-        if(namespace.indexOf('/') > -1 || namespace.indexOf(' ') > -1|| key.indexOf('/')> -1|| key.indexOf(' ') > -1){
-            throw "Namespace and key should not contain blank-space or '/'";
-            return;
-        }
+        Appbase.debug = {ab:ab};
 
-
-        if (Appbase.debug && Appbase.debug.ignoreGlobals)
-            return;
-
-        return AppbaseRef(namespace+'/'+key);
     }
 
-    if(Appbase.debug){
-        Appbase.toHide = {
-            ab:ab,
-            AppbaseRef:AppbaseRef,
-            AppbaseSnapObj: AppbaseSnapObj,
-            AppbaseObj: AppbaseObj
-        }
-    } else {
-        delete Appbase.debug;
+    ab.errors.init = function(){
+        ab.errors.vertex_not_found = "Vertex not found."
+        ab.errors.vertex_exists = "Vertex already exists."
     }
 
-})();
+    var main = function(){
+        ab.network.init();
+        ab.caching.init();
+        ab.firing.init();
+        ab.graph.init();
+        ab.interface.init();
+        ab.debug.init();
+        ab.errors.init();
+    }
+
+    main();
+
+})()
