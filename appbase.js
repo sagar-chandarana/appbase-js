@@ -75,34 +75,63 @@ Appbase = {
 
     ab.network.init = function() {
         ab.network.server = 'http://162.242.213.228:3000/';
-        ab.network.socket = io.connect(ab.network.server);
 
-        var listenToUuid = function(uuid) {
-            //add deduplication of listening
-            ab.network.socket.emit('get', uuid);
-            ab.network.socket.on(uuid, function(obj) {
-                obj = (obj == 'false'?false:obj);
+        ab.network.properties = {};
 
-                !obj &&  amplify.publish('fromServer:data_not_found', false,uuid);
+        ab.network.properties.listen = function(request,callback){
+            /*
+                Listen for properties on a path
+                 - request parameters - a JSON object
+                   * path
+                   * timestamp
 
-                obj &&  obj && amplify.publish('fromServer:data_arrived', false,uuid,obj);
+                 - callback - called whenever the data arrives
+                    arguments:
+                   * error - eg. vertex not found/network error
+                   * vertex - vertex object with properties
 
-                amplify.publish('fromServer:'+uuid, false,uuid,obj);
-            });
+                 This method filters out multiple requests on a single path. I.E. it keeps track of all the paths being listened and it simply ignores if a path is already being listened.
+             */
         }
 
-        var putByUuid = function(obj) {
-            ab.network.socket.emit('put', obj);
-            amplify.publish('fromServer:data_pushed',false,obj.id);
+        ab.network.properties.get = function(request,callback){
+            /*
+                Same as listen, but listen only once and when the data arrives, cut off the connection.
+                Callback is called only once.
+             */
         }
 
-        amplify.subscribe('toServer:listen_to_data',function(uuid){
-            listenToUuid(uuid);
-        });
+        ab.network.properties.isListening = function(path){
+            /*
+                Returns a boolean, whether a path is being listened or not
+             */
+        }
 
-        amplify.subscribe('toServer:push_data',function(obj){
-            putByUuid(obj);
-        });
+        ab.network.properties.stop = function(path){
+            /*
+                Stop listening for properties on a path
+             */
+        }
+
+        ab.network.properties.patch = function(path,vertex,callback){
+            /*
+                Rest PATCH equivalent
+                - callback
+                   arguments:
+                    *  error
+                    *  timestamp - returned from server
+             */
+        }
+
+        ab.network.properties.put = function(path,vertex,callback){
+            /*
+             Rest PUT equivalent
+             - callback
+               arguments:
+                 *  error
+                 *  timestamp - returned from server
+             */
+        }
 
     }
 
