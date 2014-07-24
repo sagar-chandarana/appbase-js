@@ -263,7 +263,7 @@ Appbase = {
 
                                     //Vertex creation
                                     //TODO: serverside creation of UUIDs for new objects
-                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:null,properties:{}},{isLocal:true}).then(function(){
+                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true}).then(function(){
                                         ab.caching.clear("creation",key);
                                         return ab.graph.storage.get('path_vertex',key);
                                     }).then(resolve,reject);
@@ -378,10 +378,6 @@ Appbase = {
 
                             val = storedVertex;
                         }
-
-                        if(extras.isLocal)
-                            val.timestamp = null;
-
 
                         //todo: preserve server's version, with a timestamp
                         val.prev = ab.caching.get(what,key).val;

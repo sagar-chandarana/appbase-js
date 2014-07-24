@@ -190,7 +190,6 @@ if(debugMode){
         abRef.properties.remove(prop1);
     });
 
-
     QUnit.test('edges.add, edges.remove',function(assert){
         expect(58);
         var collection = 'lol';
