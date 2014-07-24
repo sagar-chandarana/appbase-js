@@ -918,12 +918,14 @@ Appbase = {
                     if(event == "edge_added"){
                         //fire for existing edges
 
-                        var startAt = typeof options.startAt == 'number'? options.startAt:edges.lowestPriority; //todo: how to get the least priority?
-                        var endAt = typeof options.endAt == 'number'? options.startAt:edges.highestPriority; //todo: how to get the least priority?
 
                         //todo: reverse, skip
 
+                        var startAt = options && typeof options.startAt == 'number'? options.startAt:edges.lowestPriority;
+                        var endAt = options && typeof options.endAt == 'number'? options.startAt:edges.highestPriority;
+
                         for(var i=startAt; (i<= endAt) && startAt != +Infinity && endAt!= -Infinity ;i++){ //todo: endAt inclusive or exlusive, if exlusive, endAt at max prio doesnt work
+
                             if(edges.byPriority[i]){
 
                                 edges.byPriority[i].forEach(function(edgeName){

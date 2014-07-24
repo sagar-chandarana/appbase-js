@@ -197,13 +197,16 @@ if(debugMode){
         var abRef = Appbase.create(collection,key);
         var path = abRef.path();
 
-        var firingTestVars = {};
+        var firingTestVars = {count:0,maxCount:5};
 
         abRef.edges.on('edge_added',function(error,edgeRef,snap){
+            firingTestVars.count += 1;
             assert.equal(error,false,'no error');
+            assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ 'fire count:'+firingTestVars.count);
+
             Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.edgeRef.path())]).then(function(vertexes){
 
-                assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference');
+                assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference:'+edgeRef.path());
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -340,9 +343,27 @@ if(debugMode){
             });
         });
 
+        //fire for existing edges
+        abRef.edges.on('edge_added',function(error,edgeRef,snap){
+            firingTestVars.count += 1;
+            assert.equal(error,false,'no error');
+            assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ ' fire count:'+firingTestVars.count);
+
+            /*
+             Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.edgeRef.path())]).then(function(vertexes){
+
+             assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference:'+edgeRef.path());
+
+             },function(error){
+             assert.equal(error,'','error aayo');
+             });
+             */
+        })
+
         var prev_priority3 = priority3;
         priority3 = undefined;
 
+        firingTestVars.edgeRef = edgeRef3;
         abRef.edges.add({ref:edgeRef3, name:edgeName3},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -384,7 +405,6 @@ if(debugMode){
                 assert.equal(error,'','error aayo');
             });
         });
-
 
         //removal
         abRef.edges.remove({name:edgeName3},function(error){
