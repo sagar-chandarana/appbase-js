@@ -10,5 +10,6 @@
      - For legacy browsers
  * https://getfirebug.com/releases/lite/1.2/
      - For debugging in legacy browsers
- * https://github.com/monmohan/dsjslib
-     - its AVL tree as sorted map for storing edges
+ * For edges:
+     - https://github.com/monmohan/dsjslib: Simple AVL tree as a sorted map - needs a few modifications for an optimized use
+     - http://www.collectionsjs.com: SortedMap or SortedSet - with a lot of features and even listeners
