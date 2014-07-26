@@ -957,25 +957,35 @@ Appbase = {
 
                         //todo: reverse, skip
 
-                        var startAt = options && typeof options.startAt == 'number'? options.startAt:edges.lowestPriority;
-                        var endAt = options && typeof options.endAt == 'number'? options.startAt:edges.highestPriority;
+                        var startAt = options && typeof options.startAt == 'number'? (edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt)!= undefined? edges.sortedPriorities.find(edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt).value).index: undefined):0;
+                        var endAt = options && typeof options.endAt == 'number'? (edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt)!= undefined? edges.sortedPriorities.find(edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt).value).index+1: undefined):edges.sortedPriorities.length; //inclusive
 
-                        for(var i=startAt; (i<= endAt) && startAt != +Infinity && endAt!= -Infinity ;i++){ //todo: endAt inclusive or exlusive, if exlusive, endAt at max prio doesnt work
+                        if(startAt > endAt){
+                            //swap
+                            startAt = startAt + endAt;
+                            endAt = startAt - endAt;
+                            startAt = startAt - endAt;
 
-                            if(edges.byPriority[i]){
+                            //reverse = true;
+                        }
 
-                                edges.byPriority[i].forEach(function(edgeName){
-                                    var edgePath = path+edgeName;
+                        var priorities = (startAt != undefined && endAt != undefined)? edges.sortedPriorities.slice(startAt,endAt):[];
 
-                                    if(options && options.noData){
-                                        callback(false,Appbase.ref(edgePath,true));
-                                    } else {
-                                        ab.graph.path_vertex.get(edgePath).then(function(vertex){
-                                            callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
-                                        },callback);
-                                    }
-                                })
-                            }
+                        for(var i = 0; (i< priorities.length) ;i++){
+                            var priority = priorities[i];
+
+                            edges.byPriority[priority].forEach(function(edgeName){
+                                var edgePath = path+'/'+edgeName;
+
+                                if(options && options.noData){
+                                    callback(false,Appbase.ref(edgePath,true));
+                                } else {
+                                    ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                        callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
+                                    },callback);
+                                }
+                            })
+
                         }
 
                     } else if (event == 'edge_changed'){

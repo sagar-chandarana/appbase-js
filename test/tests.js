@@ -190,28 +190,25 @@ if(debugMode){
         abRef.properties.remove(prop1);
     });
 
-
-
-
     QUnit.test('edges.add, edges.remove',function(assert){
-        expect(77);
+        expect(86);
         var testCount = 0;
 
-        var firingTestVars = {count:0,maxCount:4};
+        var firingTestVars = {count:0,maxCount:7,refs:[]};
         var collection = 'lol';
         var key = 'rofl';
         var abRef = Appbase.create(collection,key);
         var path = abRef.path();
 
-        var edgeRef1 = Appbase.create('yoEdge1');
+        var edgeRef1 = firingTestVars.refs[1] = firingTestVars.refs[6] =  Appbase.create('yoEdge1');
         var edgeName1 = 'haha1';
         var priority1 = -500; //lowest
 
-        var edgeRef2 = Appbase.create('yoEdge2');
+        var edgeRef2 = firingTestVars.refs[2] = firingTestVars.refs[5] =  Appbase.create('yoEdge2');
         var edgeName2 = undefined; //uuid be will the name
         var priority2 = 100;// highest when inserted
 
-        var edgeRef3 = Appbase.create('yoEdge3');
+        var edgeRef3 = firingTestVars.refs[3] = firingTestVars.refs[4] = firingTestVars.refs[7] =  Appbase.create('yoEdge3');
         var edgeName3 = 'haha3';
         var priority3 = undefined; // timestamp // highest
 
@@ -220,7 +217,7 @@ if(debugMode){
             assert.equal(error,false,'no error');
             assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ 'fire count:'+firingTestVars.count);
 
-            Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.edgeRef.path())]).then(function(vertexes){
+            Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.refs[firingTestVars.count].path())]).then(function(vertexes){
 
                 assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference:'+edgeRef.path());
 
@@ -230,7 +227,6 @@ if(debugMode){
         })
 
         //addition
-        firingTestVars.edgeRef = edgeRef1;
         abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -246,7 +242,6 @@ if(debugMode){
             });
         });
 
-        firingTestVars.edgeRef = edgeRef2;
         abRef.edges.add({ref:edgeRef2, name:edgeName2,priority:priority2},function(error){
             assert.equal(error,false,'no error');
             Promise.all([Appbase.debug.ab.graph.storage.get('path_uuid',edgeRef2.path()),Appbase.debug.ab.graph.storage.get('path_edges',path)]).then(function(array){
@@ -272,7 +267,6 @@ if(debugMode){
 
         });
 
-        firingTestVars.edgeRef = edgeRef3;
         abRef.edges.add({ref:edgeRef3, name:edgeName3,priority:priority3},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -350,7 +344,8 @@ if(debugMode){
         var prev_priority3 = priority3;
         priority3 = undefined;
 
-        firingTestVars.edgeRef = edgeRef3;
+
+
         abRef.edges.add({ref:edgeRef3, name:edgeName3},function(error){
             assert.equal(error,false,'no error');
             Appbase.debug.ab.graph.storage.get('path_edges',path).then(function(edges){
@@ -392,6 +387,23 @@ if(debugMode){
                 assert.equal(error,'','error aayo');
             });
         });
+
+
+        //fire existing edges
+        abRef.edges.on('edge_added',function(error,edgeRef,snap){
+            firingTestVars.count += 1;
+            assert.equal(error,false,'no error');
+            assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ 'fire count:'+firingTestVars.count);
+
+            Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.refs[firingTestVars.count].path())]).then(function(vertexes){
+
+                assert.deepEqual(vertexes[0],vertexes[1],'existing path and reference:'+edgeRef.path());
+
+            },function(error){
+                assert.equal(error,'','error aayo');
+            });
+        })
+
 
         //removal
         abRef.edges.remove({name:edgeName3},function(error){
@@ -445,9 +457,7 @@ if(debugMode){
 
             assert.equal(Appbase.debug.ab.caching.get('path_uuid',path+'/'+edgeName1).val,undefined,'edge1 path removed');
         });
-
     });
-
 
 
 }
