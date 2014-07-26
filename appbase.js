@@ -439,7 +439,7 @@ Appbase = {
 
 
                         var cached = ab.caching.get(what,key,true);
-                        var storedVertex = cached? cached.val:undefined;
+                        var storedVertex = cached.val;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
                             resolve(); //ignore
@@ -596,8 +596,9 @@ Appbase = {
                                             //todo: in edge for edge uuid
 
                                             var priority = storedByName[edgeName].priority;
-                                            storedByPriority[priority].delete(priority);
+                                            storedByPriority[priority].delete(edgeName);
                                             delete storedByName[edgeName];
+
 
                                             if(!storedByPriority[priority].length){
                                                 sortedPriorities.delete(priority);
@@ -609,7 +610,7 @@ Appbase = {
                                             toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: 1) vertex 2) attach priority data
 
                                             var oldPriority = storedByName[edgeName].priority;
-                                            storedByPriority[oldPriority].delete(oldPriority);
+                                            storedByPriority[oldPriority].delete(edgeName);
                                             if(!storedByPriority[oldPriority].length){
                                                 sortedPriorities.delete(oldPriority);
                                             }
@@ -622,6 +623,7 @@ Appbase = {
                                             }
 
                                             storedByPriority[newPriority].add(edgeName);
+                                            sortedPriorities.add(newPriority);
 
                                             delete val[edgeName];
 
@@ -664,13 +666,15 @@ Appbase = {
                                 }
 
                                 storedByPriority[val[edgeName].priority].add(edgeName);
+                                sortedPriorities.add(val[edgeName].priority);
 
                                 //TODO: in edges
                             }
 
                             ab.caching.set(what,key,{
                                 byName: (extras.patch && storedByName)?storedByName:val,
-                                byPriority: storedByPriority
+                                byPriority: storedByPriority,
+                                sortedPriorities: sortedPriorities
                             });
 
                             resolve();
@@ -863,6 +867,7 @@ Appbase = {
     ab.firing.init = function(){
 
         ab.firing.snapshot = function(vertex){
+            vertex = Object.clone(vertex);
             var exports = {};
 
             exports.properties = function(){

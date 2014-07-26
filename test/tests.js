@@ -191,15 +191,29 @@ if(debugMode){
     });
 
 
-    /*
-    QUnit.test('edges.add, edges.remove, edges.on("added")',function(assert){
-        expect(73);
+
+
+    QUnit.test('edges.add, edges.remove',function(assert){
+        expect(77);
+        var testCount = 0;
+
+        var firingTestVars = {count:0,maxCount:4};
         var collection = 'lol';
         var key = 'rofl';
         var abRef = Appbase.create(collection,key);
         var path = abRef.path();
 
-        var firingTestVars = {count:0,maxCount:5};
+        var edgeRef1 = Appbase.create('yoEdge1');
+        var edgeName1 = 'haha1';
+        var priority1 = -500; //lowest
+
+        var edgeRef2 = Appbase.create('yoEdge2');
+        var edgeName2 = undefined; //uuid be will the name
+        var priority2 = 100;// highest when inserted
+
+        var edgeRef3 = Appbase.create('yoEdge3');
+        var edgeName3 = 'haha3';
+        var priority3 = undefined; // timestamp // highest
 
         abRef.edges.on('edge_added',function(error,edgeRef,snap){
             firingTestVars.count += 1;
@@ -215,19 +229,6 @@ if(debugMode){
             });
         })
 
-        var edgeRef1 = Appbase.create('yoEdge1');
-        var edgeName1 = 'haha1';
-        var priority1 = -500; //lowest
-
-        var edgeRef2 = Appbase.create('yoEdge2');
-        var edgeName2 = undefined; //uuid be will the name
-        var priority2 = 100;// highest when inserted
-
-        var edgeRef3 = Appbase.create('yoEdge3');
-        var edgeName3 = 'haha3';
-        var priority3 = undefined; // timestamp // highest
-
-
         //addition
         firingTestVars.edgeRef = edgeRef1;
         abRef.edges.add({ref:edgeRef1, name:edgeName1,priority:priority1},function(error){
@@ -236,9 +237,9 @@ if(debugMode){
 
                 assert.ok(edges.byName[edgeName1] && edges.byName[edgeName1].priority==priority1,'edge1-byName object');
                 assert.ok(edges.byPriority[priority1].indexOf(edgeName1) > -1,'edge1-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge1-lowestPrio');
-                assert.equal(edges.highestPriority,priority1,'edge1-higestPrio');
-                assert.ok(Appbase.debug.ab.caching.get('path_uuid'));
+                assert.equal(edges.sortedPriorities.min(),priority1,'edge1-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority1,'edge1-higestPrio');
+                assert.ok(Appbase.debug.ab.caching.get('path_uuid'),'edge1-path exists');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -254,8 +255,8 @@ if(debugMode){
 
                 assert.ok(edges.byName[edgeName2] && edges.byName[edgeName2].priority==priority2,'edge2-byName object');
                 assert.ok(edges.byPriority[priority2].indexOf(edgeName2) > -1,'edge2-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge2-lowestPrio');
-                assert.equal(edges.highestPriority,priority2,'edge2-higestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority1,'edge2-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority2,'edge2-higestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -281,8 +282,8 @@ if(debugMode){
                 priority3 = edges.byName[edgeName3].priority;
 
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge3-lowestPrio');
-                assert.equal(edges.highestPriority,priority3,'edge3-highestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority1,'edge3-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority3,'edge3-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -309,8 +310,8 @@ if(debugMode){
                 assert.ok(edges.byName[edgeName1].priority==priority1,'edge1-new prio-byName object test2');
                 assert.ok(edges.byPriority[priority1].indexOf(edgeName1) > -1,'edge1-new prio-byPriority object');
                 assert.ok(edges.byPriority[prev_priority1].indexOf(edgeName1) == -1,'edge1-new prio-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge1-new prio-lowestPrio');
-                assert.equal(edges.highestPriority,priority3,'edge1-new prio-higestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority1,'edge1-new prio-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority3,'edge1-new prio-higestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -337,30 +338,14 @@ if(debugMode){
                 assert.ok(edges.byName[edgeName2].priority==priority2,'edge2-new prio-byName object test2');
                 assert.ok(edges.byPriority[priority2].indexOf(edgeName2) > -1,'edge2-new prio-byPriority object test1');
                 assert.ok(edges.byPriority[prev_priority2].indexOf(edgeName2) == -1,'edge2-new prio-byPriority object test2');
-                assert.equal(edges.lowestPriority,priority2,'edge2-new prio-lowestPrio');
-                assert.equal(edges.highestPriority,priority3,'edge2-new prio-higestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority2,'edge2-new prio-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority3,'edge2-new prio-higestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
             });
         });
 
-        //fire for existing edges
-        abRef.edges.on('edge_added',function(error,edgeRef,snap){
-            firingTestVars.count += 1;
-            assert.equal(error,false,'no error');
-            assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ ' fire count:'+firingTestVars.count);
-
-            /*
-             Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.edgeRef.path())]).then(function(vertexes){
-
-             assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference:'+edgeRef.path());
-
-             },function(error){
-             assert.equal(error,'','error aayo');
-             });
-             * /
-        })
 
         var prev_priority3 = priority3;
         priority3 = undefined;
@@ -377,8 +362,8 @@ if(debugMode){
                 assert.equal(prev_priority3,priority3,'edge3-no prio- new prio equals old prio');
 
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-no prio-byPriority object');
-                assert.equal(edges.lowestPriority,priority2,'edge3-no prio-lowestPrio');
-                assert.equal(edges.highestPriority,priority3,'edge3-no prio-highestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority2,'edge3-no prio-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority3,'edge3-no prio-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -400,8 +385,8 @@ if(debugMode){
                 assert.ok(edges.byName[edgeName3].priority==priority3,'edge3-time prio-byName object test2');
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) > -1,'edge3-time prio-byPriority object test1');
                 assert.ok(edges.byPriority[prev_priority3].indexOf(edgeName3) == -1,'edge3-time prio-byPriority object test2');
-                assert.equal(edges.lowestPriority,priority2,'edge3-time prio-lowestPrio');
-                assert.equal(edges.highestPriority,priority3,'edge3-time prio-higestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority2,'edge3-time prio-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority3,'edge3-time prio-higestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -416,8 +401,8 @@ if(debugMode){
                 assert.ok(!edges.byName[edgeName3],'edge3-removed-byName object');
 
                 assert.ok(edges.byPriority[priority3].indexOf(edgeName3) == -1,'edge3-removed-byPriority object');
-                assert.equal(edges.lowestPriority,priority2,'edge3-removed-lowestPrio');
-                assert.equal(edges.highestPriority,priority1,'edge3-removed-highestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority2,'edge3-removed-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority1,'edge3-removed-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -434,8 +419,8 @@ if(debugMode){
                 assert.ok(!edges.byName[edgeName2],'edge2-removed-byName object');
 
                 assert.ok(edges.byPriority[priority2].indexOf(edgeName2) == -1,'edge2-removed-byPriority object');
-                assert.equal(edges.lowestPriority,priority1,'edge2-removed-lowestPrio');
-                assert.equal(edges.highestPriority,priority1,'edge2-removed-highestPrio');
+                assert.equal(edges.sortedPriorities.min(),priority1,'edge2-removed-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),priority1,'edge2-removed-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -451,8 +436,8 @@ if(debugMode){
                 assert.ok(!edges.byName[edgeName1],'edge1-removed-byName object');
 
                 assert.ok(edges.byPriority[priority1].indexOf(edgeName1) == -1,'edge1-removed-byPriority object');
-                assert.equal(edges.lowestPriority,Infinity,'edge1-removed-lowestPrio');
-                assert.equal(edges.highestPriority,-Infinity,'edge1-removed-highestPrio');
+                assert.equal(edges.sortedPriorities.min(),undefined,'edge1-removed-lowestPrio');
+                assert.equal(edges.sortedPriorities.max(),undefined,'edge1-removed-highestPrio');
 
             },function(error){
                 assert.equal(error,'','error aayo');
@@ -462,6 +447,7 @@ if(debugMode){
         });
 
     });
-    */
+
+
 
 }
