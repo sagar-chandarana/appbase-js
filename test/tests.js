@@ -190,6 +190,8 @@ if(debugMode){
         abRef.properties.remove(prop1);
     });
 
+
+    /*
     QUnit.test('edges.add, edges.remove, edges.on("added")',function(assert){
         expect(73);
         var collection = 'lol';
@@ -357,7 +359,7 @@ if(debugMode){
              },function(error){
              assert.equal(error,'','error aayo');
              });
-             */
+             * /
         })
 
         var prev_priority3 = priority3;
@@ -460,5 +462,6 @@ if(debugMode){
         });
 
     });
+    */
 
 }

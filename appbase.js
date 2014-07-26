@@ -136,6 +136,35 @@ Appbase = {
     }
 
     ab.caching.init = function(){
+
+        var beforeLoad = {
+            uuid_edges: function(input){
+                var output = {
+                    byPriority:{},
+                    sortedPriorities: new SortedSet(),
+                    byName:Object.clone(input.byName)
+                };
+
+                for(var priority in input.byPriority){
+                    output.byPriority[priority] = new SortedSet(input.byPriority[priority]);
+                    output.sortedPriorities.add(priority);
+                }
+
+                return output;
+            }
+        }
+
+        var beforeSave = {
+            uuid_edges: function(input){
+                var output = {
+                    byPriority:input.byPriority,
+                    byName:input.byName
+                };
+
+                return output;
+            }
+        }
+
         ab.caching.inMemory = {
         };
 
@@ -150,33 +179,44 @@ Appbase = {
             return {key:key,val:val}
         }
 
-        var keyFromArgs = function(prefix,key){
-            if(!key){
+        var refineArgs = function(prefix,key,clone){
+            if(key == undefined && clone == undefined && prefix){
                 var key = prefix;
-            } else {
+            } else if(clone == undefined && typeof key == "boolean" && prefix){
+                var clone = key;
+                key = prefix;
+
+            } else if(typeof key == "string" && prefix) {
                 key = prefix+':'+key;
-            }
-
-            return key;
-        }
-
-        ab.caching.get = function(prefix,key){
-            var key = keyFromArgs(prefix,key);
-
-            if(!key){
+            } else {
                 throw 'Invalid arguments for getting from cache.'
             }
 
-            if(ab.caching.inMemory[key]){
-                return {val:Object.clone(ab.caching.inMemory[key]),isFresh:true}
-            } else {
-                var fromPersistent = amplify.store(key);
-                if(fromPersistent){
-                    ab.caching.inMemory[key] = fromPersistent;
-                    return {val:Object.clone(fromPersistent),isFresh:false};
+            return {key:key,clone:clone};
+        }
+
+        ab.caching.get = function(prefix,key,clone){
+            var refined = refineArgs(prefix,key,clone);
+            var key = refined.key;
+            var clone = refined.clone;
+
+            /* TODO: improve storage mechanism of edges.
+                As all the edges are stored in a single object, cloning it has a huge overhead.
+             */
+
+            var fromPersistent,isFresh;
+            if(ab.caching.inMemory[key] || (fromPersistent = amplify.store(key))){
+                if(!ab.caching.inMemory[key]){
+                    isFresh = false;
+                    ab.caching.inMemory[key] = beforeLoad[prefix]?beforeLoad[prefix](fromPersistent):fromPersistent;
                 } else {
-                    return {isFresh:false};
+                    isFresh = true;
                 }
+
+                return {val:clone?Object.clone(ab.caching.inMemory[key]):ab.caching.inMemory[key],isFresh:isFresh};
+
+            } else {
+                return {isFresh:false};
             }
         }
 
@@ -191,15 +231,22 @@ Appbase = {
 
             ab.caching.inMemory[key] = val;
 
+            /* TODO: improve storage mechanism of edges.
+
+             As of now, all the edges are stored in a single object,
+             causing a huge write on every persistent save event.
+
+             */
+
             if(val == undefined){
                 amplify.store(key,null);
             } else {
-                amplify.store(key,val);
+                amplify.store(key,beforeSave[prefix]? beforeSave[prefix](val):val);
             }
         }
 
         ab.caching.clear = function(prefix,key){
-            var key = keyFromArgs(prefix,key);
+            var key = prefix? refineArgs(prefix,key).key:prefix;
 
             if(key){
                 ab.caching.set(key,undefined); //clear
@@ -306,12 +353,9 @@ Appbase = {
                         /*TODO: fetch from server, according to timestamp, startAT, endAt and then return data from cache */
 
                         if(cached.val){
-                            cached.val.highestPriority = cached.val.highestPriority != null? cached.val.highestPriority:-Infinity;
-                            cached.val.lowestPriority = cached.val.lowestPriority != null? cached.val.lowestPriority:Infinity;
-
                             resolve(cached.val);
                         } else {
-                            resolve ({byName:{},byPriority:{},highestPriority:-Infinity,lowestPriority:+Infinity}); //empty object, as server is not available, and the assumption is path_uuid exists, but there are no edges for this uuid.
+                            resolve ({byName:{},byPriority:{},sortedPriorities: new SortedSet()}); //empty object, as server is not available, and the assumption is path_uuid exists, but there are no edges for this uuid.
                         }
 
                         //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -394,7 +438,7 @@ Appbase = {
                         }
 
 
-                        var cached = ab.caching.get(what,key);
+                        var cached = ab.caching.get(what,key,true);
                         var storedVertex = cached? cached.val:undefined;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
@@ -414,9 +458,10 @@ Appbase = {
                         val.prev = ab.caching.get(what,key).val;
                         val.prev && delete val.prev.prev; //delete older state
 
-                        ab.caching.set(what,key,val);
 
+                        ab.caching.set(what,key,val);
                         resolve();
+
 
 
                         val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
@@ -511,23 +556,7 @@ Appbase = {
                             var cached = ab.caching.get(what,key);
                             var storedByName = cached.val? cached.val.byName:null;
                             var storedByPriority = cached.val?cached.val.byPriority:{};
-                            var lowestPriority = cached.val && cached.val.lowestPriority != null ? cached.val.lowestPriority:+Infinity;
-                            var highestPriority = cached.val && cached.val.highestPriority != null  ? cached.val.highestPriority:-Infinity;
-
-                            var setHighLow = function(prio){
-
-                                if(typeof prio != 'number' ){
-                                    reject( "Internal Error - while setting priority");
-                                }
-
-                                if(prio > highestPriority){
-                                    highestPriority = prio;
-                                }
-
-                                if(prio < lowestPriority){
-                                    lowestPriority = prio;
-                                }
-                            }
+                            var sortedPriorities = cached.val?cached.val.sortedPriorities:new SortedSet();
 
                             /*
                             format:
@@ -567,17 +596,12 @@ Appbase = {
                                             //todo: in edge for edge uuid
 
                                             var priority = storedByName[edgeName].priority;
-                                            storedByPriority[priority].splice(storedByPriority[priority].indexOf(edgeName),1);
+                                            storedByPriority[priority].delete(priority);
                                             delete storedByName[edgeName];
 
-                                            if(priority == lowestPriority){
-                                                lowestPriority = Infinity;
+                                            if(!storedByPriority[priority].length){
+                                                sortedPriorities.delete(priority);
                                             }
-
-                                            if(priority == highestPriority){
-                                                highestPriority = -Infinity;
-                                            }
-
 
 
                                         } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
@@ -585,27 +609,19 @@ Appbase = {
                                             toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: 1) vertex 2) attach priority data
 
                                             var oldPriority = storedByName[edgeName].priority;
-                                            storedByPriority[oldPriority].splice(storedByPriority[oldPriority].indexOf(edgeName),1);
+                                            storedByPriority[oldPriority].delete(oldPriority);
+                                            if(!storedByPriority[oldPriority].length){
+                                                sortedPriorities.delete(oldPriority);
+                                            }
 
                                             var newPriority = val[edgeName].priority;
                                             storedByName[edgeName].priority = newPriority;
 
                                             if(!storedByPriority[newPriority]){
-                                                storedByPriority[newPriority] = [];
+                                                storedByPriority[newPriority] = new SortedSet();
                                             }
 
-                                            storedByPriority[newPriority].push(edgeName);
-                                            storedByPriority[newPriority].sort();
-
-                                            setHighLow(newPriority);
-
-                                            if(oldPriority == lowestPriority){
-                                                lowestPriority = Infinity;
-                                            }
-
-                                            if(oldPriority == highestPriority){
-                                                highestPriority= -Infinity;
-                                            }
+                                            storedByPriority[newPriority].add(edgeName);
 
                                             delete val[edgeName];
 
@@ -644,32 +660,17 @@ Appbase = {
                                     storedByName[edgeName] = val[edgeName];
 
                                 if(!storedByPriority[val[edgeName].priority]){
-                                    storedByPriority[val[edgeName].priority] = [];
+                                    storedByPriority[val[edgeName].priority] = new SortedSet();
                                 }
 
-                                storedByPriority[val[edgeName].priority].push(edgeName);
-                                storedByPriority[val[edgeName].priority].sort();
-
-
-                                setHighLow(val[edgeName].priority);
+                                storedByPriority[val[edgeName].priority].add(edgeName);
 
                                 //TODO: in edges
                             }
 
-                            if(lowestPriority == +Infinity || highestPriority == -Infinity){
-                                for(var prio in storedByPriority){
-
-                                    if(storedByPriority[prio].length){
-                                        setHighLow(parseInt(prio));
-                                    }
-                                }
-                            }
-
                             ab.caching.set(what,key,{
                                 byName: (extras.patch && storedByName)?storedByName:val,
-                                byPriority: storedByPriority,
-                                lowestPriority:lowestPriority,
-                                highestPriority:highestPriority
+                                byPriority: storedByPriority
                             });
 
                             resolve();
@@ -884,6 +885,7 @@ Appbase = {
                 switch(event){
 
                     case "properties":
+
                         ref  = Appbase.ref(path,true);
                         break;
 
