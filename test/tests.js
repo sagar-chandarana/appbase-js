@@ -190,27 +190,155 @@ if(debugMode){
         abRef.properties.remove(prop1);
     });
 
+
     QUnit.test('edges.add, edges.remove',function(assert){
         expect(86);
-        var testCount = 0;
+
+        var noOfExpectations = 0;
+        var testEdge = function(testNo,method,args,type){
+
+        }
 
         var firingTestVars = {count:0,maxCount:7,refs:[]};
-        var collection = 'lol';
-        var key = 'rofl';
-        var abRef = Appbase.create(collection,key);
-        var path = abRef.path();
+        var testingVars = [];
 
-        var edgeRef1 = firingTestVars.refs[1] = firingTestVars.refs[6] =  Appbase.create('yoEdge1');
-        var edgeName1 = 'haha1';
-        var priority1 = -500; //lowest
+        testingVars.operand = {};
+        testingVars.operand.collection = 'lol';
+        testingVars.operand.key = 'rofl';
+        testingVars.operand.ref = Appbase.create(testingVars.operand.collection,testingVars.operand.key);
+        testingVars.operand.path = testingVars.operand.ref.path();
 
-        var edgeRef2 = firingTestVars.refs[2] = firingTestVars.refs[5] =  Appbase.create('yoEdge2');
-        var edgeName2 = undefined; //uuid be will the name
-        var priority2 = 100;// highest when inserted
+        testingVars[0] = {
+            testName:'Edge addition: with name, ref and priority',
+            method:'add',
+            args:{
+                name:'haha1',
+                ref:Appbase.create('yoEdge1'),
+                priority:-500
+            },
+            type:'add'
+        }
 
-        var edgeRef3 = firingTestVars.refs[3] = firingTestVars.refs[4] = firingTestVars.refs[7] =  Appbase.create('yoEdge3');
-        var edgeName3 = 'haha3';
-        var priority3 = undefined; // timestamp // highest
+        testingVars[1] = {
+            testName:'Edge addition: with ref and priority, no name',
+            method:'add',
+            args:{
+                name:undefined,
+                ref:Appbase.create('yoEdge2'),
+                priority:100
+            },
+            type:'add'
+        }
+
+        testingVars[2] = {
+            testName:'Edge addition: with name and ref, no priority',
+            method:'add',
+            args:{
+                name:'haha3',
+                ref:Appbase.create('yoEdge3'),
+                priority:undefined
+            },
+            type:'add'
+        }
+
+        testingVars[3] = {
+            testName:'Edge move: with name and new priority',
+            method:'add',
+            args:{
+                priority:0
+            },
+            type:'move',
+            extras:{
+                prev_args:testingVars[0].args
+            }
+        }
+
+        testingVars[4] = {
+            testName:'Edge move: with ref and new priority',
+            method:'add',
+            args:{
+                priority:-100
+            },
+            type:'move',
+            extras:{
+                prev_args:testingVars[1].args
+            }
+        }
+
+        testingVars[5] = {
+            testName:'Edge replace: with the same name and ref and no priority - i.e. the old priority ',
+            method:'add',
+            args:{
+                ref:testingVars[2].args.ref,
+                priority:undefined
+            },
+            type:'replace',
+            extras:{
+                prev_args:testingVars[2].args
+            }
+        }
+
+        testingVars[6] = {
+            testName:'Edge move: with name and "time" priority - i.e. the timestamp as priority ',
+            method:'add',
+            args:{
+                priority:"time"
+            },
+            type:'move',
+            extras:{
+                prev_args:testingVars[2].args
+            }
+        }
+
+        testingVars[7] = {
+            testName:'Edge replace: with name and a new ref, no priority - i.e. the old priority',
+            method:'add',
+            args:{
+                ref: testingVars[0].args.ref,
+                priority:undefined
+            },
+            type:'replace',
+            extras:{
+                prev_args:testingVars[2].args
+            }
+        }
+
+        testingVars[8] = {
+            testName:'Edge move: moving a just-replaced edge, with name, and a new "time" priority',
+            method:'add',
+            args:{
+                priority:"time"
+            },
+            type:'move',
+            extras:{
+                prev_args:testingVars[7].args
+            }
+        }
+
+        testingVars[9] = {
+            testName:'Edge move: moving a just-replaced edge, with name, and a new "time" priority',
+            method:'add',
+            args:{
+                priority:"time"
+            },
+            type:'move',
+            extras:{
+                prev_args:testingVars[7].args
+            }
+        }
+
+        testingVars[10] = {
+            testName:'Edge replace: Giving an existing ref (for an edge with no name) in the arguments, results as the replacement of itself',
+            method:'add',
+            args:{
+            },
+            type:'replace',
+            extras:{
+                prev_args:testingVars[7].args
+            }
+        }
+
+        //TODO: tests for a deeper graph
 
         abRef.edges.on('edge_added',function(error,edgeRef,snap){
             firingTestVars.count += 1;
