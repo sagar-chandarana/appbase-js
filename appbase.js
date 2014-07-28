@@ -554,7 +554,7 @@ Appbase = {
 
                             var toBeFired = [];
                             var cached = ab.caching.get(what,key);
-                            var storedByName = cached.val? cached.val.byName:null;
+                            var storedByName = cached.val? cached.val.byName:{};
                             var storedByPriority = cached.val?cached.val.byPriority:{};
                             var sortedPriorities = cached.val?cached.val.sortedPriorities:new SortedSet();
 
@@ -574,7 +574,7 @@ Appbase = {
                             }
                             */
 
-                            if(extras.patch && storedByName){
+                            if(extras.patch && !Object.isEmpty(storedByName)){
                                 for(var edgeName in val){
                                     //TODO: timestamps, if no priority given in the local, server-timestamp is the priority
 
@@ -640,8 +640,11 @@ Appbase = {
                             }
 
                             for(var edgeName in val){
-                                if(!val[edgeName]) // todo: server delete flag
+                                if(!val[edgeName]){ // todo: server delete flag
+                                    delete val[edgeName];
                                     continue;
+                                }
+
 
                                 if(val[edgeName].priority == undefined){
                                     val[edgeName].priority = val[edgeName].timestamp;
@@ -792,13 +795,17 @@ Appbase = {
                     };
 
                     var stepTwo = function(){
-                        if(newEdge.target){
-                            ab.graph.path_vertex.get(edgePath)
+                        if(!newEdge.delete){
+                            var pros = [];
+                            if(edgePath)
+                                pros.push(ab.graph.path_vertex.get(edgePath));
+
+                            Promise.all(pros)
                                 .then(function(edgeVertex){
                                     edges[edgeName] = {
                                         timestamp: ab.util.timestamp(),
                                         priority: priority,
-                                        data:edgeVertex
+                                        data:edgeVertex && edgeVertex[0]?edgeVertex[0]:undefined
                                     };
 
                                     ab.graph.storage.set('path_edges',path,edges,extras).then(handleServer,reject);
@@ -833,11 +840,21 @@ Appbase = {
                         }
 
                         if(!edgeName){
-
                             ab.graph.path_vertex.get(edgePath).then(function(vertex){
                                 edgeName = vertex.uuid;
                                 stepTwo();
                             },reject);
+                        } else if(!edgePath){
+                            ab.graph.path_vertex.get(path+'/'+edgeName).then(function(vertex){
+                                stepTwo();
+                            },function(error){
+                                if(error == ab.errors.vertex_not_found){
+                                    reject("Edge being modifed doesn't exist.");
+                                } else {
+                                    reject(error);
+                                }
+                            });
+
                         } else {
                             stepTwo();
                         }
@@ -1056,9 +1073,7 @@ Appbase = {
             }
 
             exports.edges.add = function(args,callback){
-                if(args.ref && args.ref.path()){
-                    args.target = args.ref.path();
-                } else {
+                if(!((args.ref && args.ref.path()) || args.name)){
                     callback('Invalid arguments');
                 }
 
@@ -1076,7 +1091,7 @@ Appbase = {
                     callback('Invalid arguments');
                 }
 
-                args.target = null; //delete
+                args.delete = true; //delete
 
                 ab.graph.path_out_edges.set(priv.path,args,{isLocal:true,patch:true,shouldExist:true}).then(function(){
                     callback(false);// todo: ref and snap

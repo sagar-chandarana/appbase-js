@@ -197,16 +197,17 @@ if(debugMode){
         var testEdge = function(testNo,testVars){
             (testVars.type == 'replace' ||  testVars.type == 'move' || testVars.type == 'remove') && (testVars.args.name = testVars.args.name != undefined? testVars.args.name: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.name:undefined));
             (testVars.type == 'replace' || ((testVars.type == 'remove' ||  testVars.type == 'move') && testVars.args.name == undefined)) && (testVars.args.ref = testVars.args.ref!= undefined? testVars.args.ref: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.ref:undefined));
+            (testVars.type == 'add' && testVars.args.priority == undefined) && (testVars.args.priority = 'time');
 
-            (testVars.type != "remove") && (noOfExpectations += 8);
-            (testVars.type != "add" || testVars.type != "replace") &&  (noOfExpectations += 7);
-            (testVars.type != "move") && (noOfExpectations += 9);
+            (testVars.type == "remove") && (noOfExpectations += 8);
+            (testVars.type == "add" || testVars.type == "replace") &&  (noOfExpectations += 7);
+            (testVars.type == "move") && (noOfExpectations += 9);
 
             expect(noOfExpectations); //Important
-
             testOperand.ref.edges[testVars.method](testVars.args,function(error){
                 assert.equal(error,false,testNo+') '+testVars.testName);
-                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperand.path),Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path())])
+
+                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperand.path),testVars.args.ref != undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
                 .then(function(array){
                     var edges = array[0];
                     if(testVars.type != "remove"){
@@ -215,13 +216,15 @@ if(debugMode){
 
                         assert.ok(edges.byName[testVars.obtained.name],'byName-test1:edgeName');
 
-                        var prev_priority = testVars.basedOn? edgesToTest[testVars.basedOn].obtained.priority:undefined;
+                        var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
                         prev_priority != undefined && (testOperand.sortedPriorities.delete(prev_priority));
 
                         var expectedPriority = testVars.args.priority != undefined? testVars.args.priority:prev_priority;
                         expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained.name].timestamp:expectedPriority);
 
+                        console.log(edges.byName[testVars.obtained.name]);
                         testVars.obtained.priority = edges.byName[testVars.obtained.name].priority;
+
                         assert.equal(testVars.obtained.priority,expectedPriority,'byName-test2:priority');
                         testOperand.sortedPriorities.add(expectedPriority);
 
@@ -232,7 +235,9 @@ if(debugMode){
                         (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained.name) == -1,'byPriority object - old priority is gone');
                         assert.equal(edges.sortedPriorities.min(),testOperand.sortedPriorities.min(),'lowest priority');
                         assert.equal(edges.sortedPriorities.max(),testOperand.sortedPriorities.max(),'highest priority');
-                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,array[1].uuid,"edge-path's uuid");
+
+                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,array[1].uuid,"edge-path's uuid");
+                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,"edge-path's uuid");
 
                     } else {
 
@@ -259,7 +264,7 @@ if(debugMode){
             });
         }
 
-        testOperand = {};
+        var testOperand = {};
         testOperand.collection = 'lol';
         testOperand.key = 'rofl';
         testOperand.ref = Appbase.create(testOperand.collection,testOperand.key);
@@ -276,6 +281,7 @@ if(debugMode){
                 ref:Appbase.create('yoEdge1'),
                 priority:-500
             },
+            obtained:{},
             type:'add'
         }
 
@@ -287,6 +293,7 @@ if(debugMode){
                 ref:Appbase.create('yoEdge2'),
                 priority:100
             },
+            obtained:{},
             type:'add'
         }
 
@@ -298,6 +305,7 @@ if(debugMode){
                 ref:Appbase.create('yoEdge3'),
                 priority:undefined
             },
+            obtained:{},
             type:'add'
         }
 
@@ -337,7 +345,7 @@ if(debugMode){
         }
 
         edgesToTest[6] = {
-            testName:'Edge move: with name and "time" priority - i.e. the timestamp as priority ',
+            testName:'Edge move: with name and "time" priority - i.e. the timestamp as priority',
             method:'add',
             args:{
                 priority:"time"
@@ -420,7 +428,7 @@ if(debugMode){
 
         //TODO: tests for a deeper graph
 
-        for(var i=0;edgesToTest[i]!=undefined;i++){
+        for(var i=0;i<7 && edgesToTest[i]!=undefined;i++){
             testEdge(i,edgesToTest[i]);
         }
 
@@ -442,5 +450,6 @@ if(debugMode){
         })
 */
 
+    });
 
 }
