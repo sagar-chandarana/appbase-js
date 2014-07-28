@@ -616,7 +616,7 @@ Appbase = {
                                             }
 
                                             var newPriority = val[edgeName].priority;
-                                            storedByName[edgeName].priority = newPriority;
+                                            storedByName[edgeName] = val[edgeName];
 
                                             if(!storedByPriority[newPriority]){
                                                 storedByPriority[newPriority] = new SortedSet();

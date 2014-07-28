@@ -221,8 +221,6 @@ if(debugMode){
 
                         var expectedPriority = testVars.args.priority != undefined? testVars.args.priority:prev_priority;
                         expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained.name].timestamp:expectedPriority);
-
-                        console.log(edges.byName[testVars.obtained.name]);
                         testVars.obtained.priority = edges.byName[testVars.obtained.name].priority;
 
                         assert.equal(testVars.obtained.priority,expectedPriority,'byName-test2:priority');
@@ -241,10 +239,10 @@ if(debugMode){
 
                     } else {
 
-                        var deletedEdgeName = testVars.basedOn? edgesToTest[testVars.basedOn].obtained.name:undefined;
-                        var deletedPriority = testVars.basedOn? edgesToTest[testVars.basedOn].obtained.priority:undefined;
+                        var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.name:undefined;
+                        var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
                         assert.ok(deletedEdgeName,"There's an edge to delete");
-                        assert.ok(deletedPriority && typeof deletedPriority == "number",'Deleted edge had a priority');
+                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",'Deleted edge had a priority');
 
                         edges.byPriority[deletedPriority].length == 0 && (testOperand.sortedPriorities.delete(deletedPriority));
 
@@ -352,7 +350,7 @@ if(debugMode){
             },
             type:'move',
             obtained:{},
-            basedOn:2
+            basedOn:5
 
         }
 
@@ -365,7 +363,7 @@ if(debugMode){
             },
             type:'replace',
             obtained:{},
-            basedOn:2
+            basedOn:6
 
         }
 
@@ -399,7 +397,7 @@ if(debugMode){
             },
             type:'remove',
             obtained:{},
-            basedOn:0
+            basedOn:3
 
         }
 
@@ -410,7 +408,7 @@ if(debugMode){
             },
             type:'remove',
             obtained:{},
-            basedOn:1
+            basedOn:9
 
         }
 
@@ -421,14 +419,14 @@ if(debugMode){
             },
             type:'remove',
             obtained:{},
-            basedOn:2
+            basedOn:8
 
         }
 
 
         //TODO: tests for a deeper graph
 
-        for(var i=0;i<7 && edgesToTest[i]!=undefined;i++){
+        for(var i=0;edgesToTest[i]!=undefined;i++){
             testEdge(i,edgesToTest[i]);
         }
 
