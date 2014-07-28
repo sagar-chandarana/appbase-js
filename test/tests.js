@@ -214,7 +214,7 @@ if(debugMode){
 
                         testVars.obtained.name = testVars.args.name != undefined?testVars.args.name:array[1].uuid;
 
-                        assert.ok(edges.byName[testVars.obtained.name],'byName-test1:edgeName');
+                        assert.ok(edges.byName[testVars.obtained.name],testNo+') '+'byName-test1:edgeName');
 
                         var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
                         prev_priority != undefined && (testOperand.sortedPriorities.delete(prev_priority));
@@ -223,35 +223,35 @@ if(debugMode){
                         expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained.name].timestamp:expectedPriority);
                         testVars.obtained.priority = edges.byName[testVars.obtained.name].priority;
 
-                        assert.equal(testVars.obtained.priority,expectedPriority,'byName-test2:priority');
+                        assert.equal(testVars.obtained.priority,expectedPriority,testNo+') '+'byName-test2:priority');
                         testOperand.sortedPriorities.add(expectedPriority);
 
-                        (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,'Priority modified');
+                        (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,testNo+') '+'Priority modified');
 
-                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained.name) > -1,'byPriority object');
+                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained.name) > -1,testNo+') '+'byPriority object');
 
-                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained.name) == -1,'byPriority object - old priority is gone');
-                        assert.equal(edges.sortedPriorities.min(),testOperand.sortedPriorities.min(),'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperand.sortedPriorities.max(),'highest priority');
+                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained.name) == -1,testNo+') '+'byPriority object - old priority is gone');
+                        assert.equal(edges.sortedPriorities.min(),testOperand.sortedPriorities.min(),testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperand.sortedPriorities.max(),testNo+') '+'highest priority');
 
-                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,array[1].uuid,"edge-path's uuid");
-                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,"edge-path's uuid");
+                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,array[1].uuid,testNo+') '+"edge-path's uuid");
+                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+testVars.obtained.name).val,testNo+') '+"edge-path's uuid");
 
                     } else {
 
                         var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.name:undefined;
                         var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
-                        assert.ok(deletedEdgeName,"There's an edge to delete");
-                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",'Deleted edge had a priority');
+                        assert.ok(deletedEdgeName,testNo+') '+"There's an edge to delete");
+                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",testNo+') '+'Deleted edge had a priority');
 
                         edges.byPriority[deletedPriority].length == 0 && (testOperand.sortedPriorities.delete(deletedPriority));
 
-                        assert.ok(!edges.byName[deletedEdgeName],'byName object');
+                        assert.ok(!edges.byName[deletedEdgeName],testNo+') '+'byName object');
 
-                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,'byPriority object');
-                        assert.equal(edges.sortedPriorities.min(),testOperand.sortedPriorities.min(),'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperand.sortedPriorities.max(),'highest priority');
-                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+deletedEdgeName).val,undefined,'edge-path removed');
+                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,testNo+') '+'byPriority object');
+                        assert.equal(edges.sortedPriorities.min(),testOperand.sortedPriorities.min(),testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperand.sortedPriorities.max(),testNo+') '+'highest priority');
+                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperand.path+'/'+deletedEdgeName).val,undefined,testNo+') '+'edge-path removed');
 
                     }
 
