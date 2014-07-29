@@ -590,7 +590,7 @@ Appbase = {
 
                                         if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority){ //todo: 1)server delete flag 2)//todo: check for uuids
                                             //remove edge
-                                            toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: vertex
+                                            toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName,priority:storedByName[edgeName].priority,prev_priority:storedByName[edgeName].priority}]); //todo: vertex
 
                                             ab.caching.clear('path_uuid',extras.path+'/'+edgeName);
                                             //todo: in edge for edge uuid
@@ -607,7 +607,7 @@ Appbase = {
 
                                         } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
 
-                                            toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]); //todo: 1) vertex 2) attach priority data
+                                            toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName,priority:val[edgeName].priority,prev_priority:storedByName[edgeName].priority}]); //todo: vertex
 
                                             var oldPriority = storedByName[edgeName].priority;
                                             storedByPriority[oldPriority].delete(edgeName);
@@ -657,7 +657,7 @@ Appbase = {
                                     ab.graph.storage.set('path_vertex',path,vertex);
                                 }
 
-                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName}]);
+                                toBeFired.push(['edge_added',key,val[edgeName].data?val[edgeName].data:ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName,priority:val[edgeName].priority,prev_priority:null}]);
 
                                 delete val[edgeName].data;
 
@@ -883,7 +883,7 @@ Appbase = {
 
     ab.firing.init = function(){
 
-        ab.firing.snapshot = function(vertex){
+        ab.firing.vertexSnapshot = function(vertex){
             vertex = Object.clone(vertex);
             var exports = {};
 
@@ -898,7 +898,26 @@ Appbase = {
             return exports;
         }
 
-        ab.firing.fire = function(event,uuid,vertex,extras){
+        ab.firing.edgeSnapshot = function(edgeData){
+            //no need to clone, as the object is not going to modified any internal methods
+            var exports = {};
+
+            exports.priority = function(){
+                return edgeData.priority;
+            }
+
+            exports.prevPriority = function(){
+                return edgeData.prev_priority;
+            }
+
+            exports.name = function(){
+                return edgeData.edgeName;
+            }
+
+            return exports;
+        }
+
+        ab.firing.fire = function(event,uuid,vertex,edgeData){
             var ref;
 
             var paths = ab.graph.uuid_paths.getSync(uuid);
@@ -915,7 +934,7 @@ Appbase = {
                     case "edge_removed":
                     case "edge_changed":
                     case "edge_moved":
-                        ref  = Appbase.ref(path+'/'+extras.edgeName,true);
+                        ref  = Appbase.ref(path+'/'+edgeData.edgeName,true);
                         break;
 
                     default:
@@ -923,7 +942,8 @@ Appbase = {
 
                 }
 
-                amplify.publish(event+':'+path,false,ref,ab.firing.snapshot(vertex)); //TODO: extras (name,priority)
+                //TODO: amplify returns 1) listener name and 2)event name in the callback: stop that for user events
+                amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex),ab.firing.edgeSnapshot(edgeData)); //TODO: extras (name,priority)
             };
         }
 
@@ -933,7 +953,7 @@ Appbase = {
 
             ab.graph.path_vertex.get(path)
             .then(function(vertex){
-                callback(false,Appbase.ref(path,true),ab.firing.snapshot(vertex));
+                callback(false,Appbase.ref(path,true),ab.firing.vertexSnapshot(vertex));
 
             },function(error){
                 amplify.unsubscribe('properties:'+path,listenerName);
@@ -998,7 +1018,7 @@ Appbase = {
                                     callback(false,Appbase.ref(edgePath,true));
                                 } else {
                                     ab.graph.path_vertex.get(edgePath).then(function(vertex){
-                                        callback(false,Appbase.ref(edgePath),ab.firing.snapshot(vertex)); //todo: name and extra data
+                                        callback(false,Appbase.ref(edgePath),ab.firing.vertexSnapshot(vertex)); //todo: name and extra data
                                     },callback);
                                 }
                             })

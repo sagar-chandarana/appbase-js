@@ -507,7 +507,7 @@ if(debugMode){
 
         var testEvents = function(operand){
 
-            testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,snap){
+            testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.add.shift();
                 assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_added:'+edgeRef.path());
@@ -516,7 +516,7 @@ if(debugMode){
 
             })
 
-            testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,snap){
+            testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.remove.shift();
                 assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
@@ -532,7 +532,7 @@ if(debugMode){
                 */
             })
 
-            testOperands[operand].ref.edges.on('edge_moved',function(error,edgeRef,snap){
+            testOperands[operand].ref.edges.on('edge_moved',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.move.shift();
                 assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_moved:'+edgeRef.path());
