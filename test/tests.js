@@ -198,19 +198,48 @@ if(debugMode){
             (testVars.type == 'replace' || ((testVars.type == 'remove' ||  testVars.type == 'move') && testVars.args.name == undefined)) && (testVars.args.ref = testVars.args.ref!= undefined? testVars.args.ref: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.ref:undefined));
             (testVars.type == 'add' && testVars.args.priority == undefined) && (testVars.args.priority = 'time');
 
-            (testVars.type == "remove") && (noOfExpectations += 8);
-            (testVars.type == "add" || testVars.type == "replace") &&  (noOfExpectations += 7);
-            (testVars.type == "move") && (noOfExpectations += 9);
+            (testVars.type == "remove") && expect(noOfExpectations += 8);
+            (testVars.type == "add" || testVars.type == "replace") &&  expect(noOfExpectations += 7);
+            (testVars.type == "move") && expect(noOfExpectations += 9);
 
             if(!testOperands[operand].ref){
                 testOperands[operand].path = edgesToTest[testOperands[operand].refFromTest.testNo].obtained[testOperands[operand].refFromTest.operand].path;
                 testOperands[operand].ref = Appbase.ref(testOperands[operand].path);
             }
 
+            if(!testOperands[operand].eventsExpected){
+                testOperands[operand].eventsExpected = {};
+                testEvents(operand);
+            }
+
+            var expectEvent =function(event){
+                (event == 'add') && expect(noOfExpectations += 2);
+                (event == 'remove') && expect(noOfExpectations += 2);
+
+                !testOperands[operand].eventsExpected[event]  && (testOperands[operand].eventsExpected[event] = []);
+                testOperands[operand].eventsExpected[event].push(testNo);
+            }
+
+            switch(testVars.type){
+                case 'replace':
+                    expectEvent('remove');
+                    expectEvent('add');
+                    break;
+
+                case 'add':
+                case 'remove':
+                case 'move':
+                    expectEvent(testVars.type);
+                    break;
+
+                default :
+                    throw ("Shouldn't be here");
+                    break;
+            }
+
             !testVars.obtained && (testVars.obtained = {});
             !testVars.obtained[operand] && (testVars.obtained[operand] = {});
 
-            expect(noOfExpectations); //Important
             testOperands[operand].ref.edges[testVars.method](testVars.args,function(error){
                 assert.equal(error,false,operand+','+testNo+') '+testVars.testName);
 
@@ -253,6 +282,10 @@ if(debugMode){
                         assert.ok(deletedEdgeName,operand+','+testNo+') '+"There's an edge to delete");
                         assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",operand+','+testNo+') '+'Deleted edge had a priority');
 
+                        !edgesToTest[testNo].deleted && (edgesToTest[testNo].deleted = {});
+                        edgesToTest[testNo].deleted.name = deletedEdgeName;
+                        edgesToTest[testNo].deleted.priority = deletedPriority;
+
                         edges.byPriority[deletedPriority].length == 0 && (testOperands[operand].sortedPriorities.delete(deletedPriority));
 
                         assert.ok(!edges.byName[deletedEdgeName],operand+','+testNo+') '+'byName object');
@@ -265,7 +298,7 @@ if(debugMode){
                     }
 
                 },function(error){
-                    assert.equal(error,'','error aayo');
+                    assert.equal(error,'',operand+','+testNo+') '+'error aayo');
                 });
 
             });
@@ -471,6 +504,35 @@ if(debugMode){
         //TODO: tests for edges pointing to the same vertex
         //TODO: edges with deeper paths
 
+        var testEvents = function(operand){
+
+            testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,snap){
+                var testNo = testOperands[operand].eventsExpected.add.shift();
+                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.equal(error,false,operand+','+testNo+') '+'Event: edge_added:'+edgeRef.path());
+                //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].obtained.name,"Fired ref's path is as expected");
+                //TODO: snapshot
+
+            })
+
+            testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,snap){
+                var testNo = testOperands[operand].eventsExpected.remove.shift();
+                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
+                //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
+                //TODO: snapshot
+
+                /*
+                Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(edgesToTest[testNo].args.ref.path())]).then(function(vertexes){
+                    assert.deepEqual(vertexes[0],vertexes[1],operand+','+testNo+') '+'Fired refs point to proper vertex');
+                },function(error){
+                    assert.equal(error,'',operand+','+testNo+') '+'error aayo');
+                });
+                */
+            })
+
+        }
+
         for(var testSeqN=0;testSeqN<testSequence.length;testSeqN++){
 
             var edgeTestN = testSequence[testSeqN].startEdge;
@@ -481,24 +543,6 @@ if(debugMode){
             } while(edgeTestN<=testSequence[testSeqN].endEdge && edgeTestN>testSequence[testSeqN].startEdge);
 
         }
-
-/*
-       var firingTestVars = {count:0,maxCount:7,refs:[]};
-
-        abRef.edges.on('edge_added',function(error,edgeRef,snap){
-            firingTestVars.count += 1;
-            assert.equal(error,false,'no error');
-            assert.ok(firingTestVars.count<=firingTestVars.maxCount,'edge_added:'+edgeRef.path()+ 'fire count:'+firingTestVars.count);
-
-            Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(firingTestVars.refs[firingTestVars.count].path())]).then(function(vertexes){
-
-                assert.deepEqual(vertexes[0],vertexes[1],'new edge path and reference:'+edgeRef.path());
-
-            },function(error){
-                assert.equal(error,'','error aayo');
-            });
-        })
-*/
 
     });
 
