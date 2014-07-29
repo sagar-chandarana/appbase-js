@@ -193,7 +193,7 @@ if(debugMode){
     QUnit.test('edges.add, edges.remove',function(assert){
 
         var noOfExpectations = 0;
-        var testEdge = function(testNo,testVars){
+        var testEdge = function(operand,testNo,testVars){
             (testVars.type == 'replace' ||  testVars.type == 'move' || testVars.type == 'remove') && (testVars.args.name = testVars.args.name != undefined? testVars.args.name: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.name:undefined));
             (testVars.type == 'replace' || ((testVars.type == 'remove' ||  testVars.type == 'move') && testVars.args.name == undefined)) && (testVars.args.ref = testVars.args.ref!= undefined? testVars.args.ref: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.ref:undefined));
             (testVars.type == 'add' && testVars.args.priority == undefined) && (testVars.args.priority = 'time');
@@ -202,11 +202,16 @@ if(debugMode){
             (testVars.type == "add" || testVars.type == "replace") &&  (noOfExpectations += 7);
             (testVars.type == "move") && (noOfExpectations += 9);
 
-            expect(noOfExpectations); //Important
-            testOperands[testVars.operand].ref.edges[testVars.method](testVars.args,function(error){
-                assert.equal(error,false,testNo+') '+testVars.testName);
+            if(!testOperands[operand].ref){
+                testOperands[operand].path = edgesToTest[testOperands[operand].refFromTest].obtained.path;
+                testOperands[operand].ref = Appbase.ref(testOperands[operand].path);
+            }
 
-                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperands[testVars.operand].path),testVars.args.ref != undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
+            expect(noOfExpectations); //Important
+            testOperands[operand].ref.edges[testVars.method](testVars.args,function(error){
+                assert.equal(error,false,operand+','+testNo+') '+testVars.testName);
+
+                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperands[operand].path),testVars.args.ref != undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
                 .then(function(array){
                     var edges = array[0];
                     if(testVars.type != "remove"){
@@ -216,24 +221,24 @@ if(debugMode){
                         assert.ok(edges.byName[testVars.obtained.name],testNo+') '+'byName-test1:edgeName');
 
                         var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
-                        prev_priority != undefined && (testOperands[testVars.operand].sortedPriorities.delete(prev_priority));
+                        prev_priority != undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
 
                         var expectedPriority = testVars.args.priority != undefined? testVars.args.priority:prev_priority;
                         expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained.name].timestamp:expectedPriority);
                         testVars.obtained.priority = edges.byName[testVars.obtained.name].priority;
 
                         assert.equal(testVars.obtained.priority,expectedPriority,testNo+') '+'byName-test2:priority');
-                        testOperands[testVars.operand].sortedPriorities.add(expectedPriority);
+                        testOperands[operand].sortedPriorities.add(expectedPriority);
 
                         (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,testNo+') '+'Priority modified');
 
                         assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained.name) > -1,testNo+') '+'byPriority object');
 
                         (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained.name) == -1,testNo+') '+'byPriority object - old priority is gone');
-                        assert.equal(edges.sortedPriorities.min(),testOperands[testVars.operand].sortedPriorities.min(),testNo+') '+'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperands[testVars.operand].sortedPriorities.max(),testNo+') '+'highest priority');
+                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
 
-                        testVars.obtained.path = testOperands[testVars.operand].path+'/'+testVars.obtained.name;
+                        testVars.obtained.path = testOperands[operand].path+'/'+testVars.obtained.name;
                         array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained.path).val,array[1].uuid,testNo+') '+"edge-path's uuid");
                         !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained.path).val,testNo+') '+"edge-path's uuid");
 
@@ -245,14 +250,14 @@ if(debugMode){
                         assert.ok(deletedEdgeName,testNo+') '+"There's an edge to delete");
                         assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",testNo+') '+'Deleted edge had a priority');
 
-                        edges.byPriority[deletedPriority].length == 0 && (testOperands[testVars.operand].sortedPriorities.delete(deletedPriority));
+                        edges.byPriority[deletedPriority].length == 0 && (testOperands[operand].sortedPriorities.delete(deletedPriority));
 
                         assert.ok(!edges.byName[deletedEdgeName],testNo+') '+'byName object');
 
                         assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,testNo+') '+'byPriority object');
-                        assert.equal(edges.sortedPriorities.min(),testOperands[testVars.operand].sortedPriorities.min(),testNo+') '+'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperands[testVars.operand].sortedPriorities.max(),testNo+') '+'highest priority');
-                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[testVars.operand].path+'/'+deletedEdgeName).val,undefined,testNo+') '+'edge-path removed');
+                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
+                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[operand].path+'/'+deletedEdgeName).val,undefined,testNo+') '+'edge-path removed');
 
                     }
 
@@ -266,7 +271,6 @@ if(debugMode){
         var edgesToTest = [];
 
         edgesToTest[0] = {
-            operand:0,
             testName:'Edge addition: with name, ref and priority',
             method:'add',
             args:{
@@ -279,7 +283,6 @@ if(debugMode){
         }
 
         edgesToTest[1] = {
-            operand:0,
             testName:'Edge addition: with ref and priority, no name',
             method:'add',
             args:{
@@ -292,7 +295,6 @@ if(debugMode){
         }
 
         edgesToTest[2] = {
-            operand:0,
             testName:'Edge addition: with name and ref, no priority',
             method:'add',
             args:{
@@ -305,7 +307,6 @@ if(debugMode){
         }
 
         edgesToTest[3] = {
-            operand:0,
             testName:'Edge move: with name and new priority',
             method:'add',
             args:{
@@ -317,7 +318,6 @@ if(debugMode){
         }
 
         edgesToTest[4] = {
-            operand:0,
             testName:'Edge move: with ref and new priority',
             method:'add',
             args:{
@@ -329,7 +329,6 @@ if(debugMode){
         }
 
         edgesToTest[5] = {
-            operand:0,
             testName:'Edge replace: with the same name and ref and no priority - i.e. the old priority ',
             method:'add',
             args:{
@@ -343,7 +342,6 @@ if(debugMode){
         }
 
         edgesToTest[6] = {
-            operand:0,
             testName:'Edge move: with name and "time" priority - i.e. the timestamp as priority',
             method:'add',
             args:{
@@ -356,7 +354,6 @@ if(debugMode){
         }
 
         edgesToTest[7] = {
-            operand:0,
             testName:'Edge replace: with name and a new ref, no priority - i.e. the old priority',
             method:'add',
             args:{
@@ -370,7 +367,6 @@ if(debugMode){
         }
 
         edgesToTest[8] = {
-            operand:0,
             testName:'Edge move: moving a just-replaced edge, with name, and a new "time" priority',
             method:'add',
             args:{
@@ -383,7 +379,6 @@ if(debugMode){
         }
 
         edgesToTest[9] = {
-            operand:0,
             testName:'Edge replace: Giving an existing ref (for an edge with no name) in the arguments, results as the replacement of itself',
             method:'add',
             args:{
@@ -395,7 +390,6 @@ if(debugMode){
         }
 
         edgesToTest[10] = {
-            operand:0,
             testName:'Edge remove: with name',
             method:'remove',
             args:{
@@ -407,7 +401,6 @@ if(debugMode){
         }
 
         edgesToTest[11] = {
-            operand:0,
             testName:'Edge remove: with ref',
             method:'remove',
             args:{
@@ -419,7 +412,6 @@ if(debugMode){
         }
 
         edgesToTest[12] = {
-            operand:0,
             testName:'Edge remove: with name',
             method:'remove',
             args:{
@@ -427,7 +419,6 @@ if(debugMode){
             type:'remove',
             obtained:{},
             basedOn:8
-
         }
 
         var testOperands = [];
@@ -438,10 +429,32 @@ if(debugMode){
         testOperands[0].path = testOperands[0].ref.path();
         testOperands[0].sortedPriorities = new SortedSet();
 
-        //TODO: tests for a deeper graph - edges with deeper paths, operands with deeper paths
+        testOperands[1] = {};
+        testOperands[1].refFromTest = 9;
+        testOperands[1].sortedPriorities = new SortedSet();
 
-        for(var i=0;edgesToTest[i]!=undefined;i++){
-            testEdge(i,edgesToTest[i]);
+        var testSequence = [
+            {
+                operand:0,
+                startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:0,
+                startEdge:10,
+                endEdge:12
+            }
+        ];
+
+        for(var testSeqN=0;testSeqN<testSequence.length;testSeqN++){
+
+            var edgeTestN = testSequence[testSeqN].startEdge;
+            do{
+                testEdge(testSequence[testSeqN].operand,edgeTestN,edgesToTest[edgeTestN]);
+                edgeTestN+=1;
+
+            } while(edgeTestN<=testSequence[testSeqN].endEdge && edgeTestN>testSequence[testSeqN].startEdge);
+
         }
 
 /*
