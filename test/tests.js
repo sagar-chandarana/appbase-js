@@ -203,9 +203,12 @@ if(debugMode){
             (testVars.type == "move") && (noOfExpectations += 9);
 
             if(!testOperands[operand].ref){
-                testOperands[operand].path = edgesToTest[testOperands[operand].refFromTest].obtained.path;
+                testOperands[operand].path = edgesToTest[testOperands[operand].refFromTest.testNo].obtained[testOperands[operand].refFromTest.operand].path;
                 testOperands[operand].ref = Appbase.ref(testOperands[operand].path);
             }
+
+            !testVars.obtained && (testVars.obtained = {});
+            !testVars.obtained[operand] && (testVars.obtained[operand] = {});
 
             expect(noOfExpectations); //Important
             testOperands[operand].ref.edges[testVars.method](testVars.args,function(error){
@@ -216,37 +219,36 @@ if(debugMode){
                     var edges = array[0];
                     if(testVars.type != "remove"){
 
-                        testVars.obtained.name = testVars.args.name != undefined?testVars.args.name:array[1].uuid;
+                        testVars.obtained[operand].name = testVars.args.name != undefined?testVars.args.name:array[1].uuid;
 
-                        assert.ok(edges.byName[testVars.obtained.name],testNo+') '+'byName-test1:edgeName');
+                        assert.ok(edges.byName[testVars.obtained[operand].name],testNo+') '+'byName-test1:edgeName');
 
-                        var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
+                        var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
                         prev_priority != undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
 
                         var expectedPriority = testVars.args.priority != undefined? testVars.args.priority:prev_priority;
-                        expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained.name].timestamp:expectedPriority);
-                        testVars.obtained.priority = edges.byName[testVars.obtained.name].priority;
+                        expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained[operand].name].timestamp:expectedPriority);
+                        testVars.obtained[operand].priority = edges.byName[testVars.obtained[operand].name].priority;
 
-                        assert.equal(testVars.obtained.priority,expectedPriority,testNo+') '+'byName-test2:priority');
+                        assert.equal(testVars.obtained[operand].priority,expectedPriority,testNo+') '+'byName-test2:priority');
                         testOperands[operand].sortedPriorities.add(expectedPriority);
 
                         (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,testNo+') '+'Priority modified');
 
-                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained.name) > -1,testNo+') '+'byPriority object');
+                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained[operand].name) > -1,testNo+') '+'byPriority object');
 
-                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained.name) == -1,testNo+') '+'byPriority object - old priority is gone');
+                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) == -1,testNo+') '+'byPriority object - old priority is gone');
                         assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),testNo+') '+'lowest priority');
                         assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
 
-                        testVars.obtained.path = testOperands[operand].path+'/'+testVars.obtained.name;
-                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained.path).val,array[1].uuid,testNo+') '+"edge-path's uuid");
-                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained.path).val,testNo+') '+"edge-path's uuid");
-
+                        testVars.obtained[operand].path = testOperands[operand].path+'/'+testVars.obtained[operand].name;
+                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,array[1].uuid,testNo+') '+"edge-path's uuid");
+                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,testNo+') '+"edge-path's uuid");
 
                     } else {
 
-                        var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained.name:undefined;
-                        var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained.priority:undefined;
+                        var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].name:undefined;
+                        var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
                         assert.ok(deletedEdgeName,testNo+') '+"There's an edge to delete");
                         assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",testNo+') '+'Deleted edge had a priority');
 
@@ -430,14 +432,29 @@ if(debugMode){
         testOperands[0].sortedPriorities = new SortedSet();
 
         testOperands[1] = {};
-        testOperands[1].refFromTest = 9;
+        testOperands[1].refFromTest = {operand:0,testNo:9};
         testOperands[1].sortedPriorities = new SortedSet();
+
+        testOperands[2] = {};
+        testOperands[2].refFromTest = {operand:1,testNo:9};
+        testOperands[2].sortedPriorities = new SortedSet();
+
 
         var testSequence = [
             {
                 operand:0,
                 startEdge:0,
                 endEdge:9
+            },
+            {
+                operand:1,
+                startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:1,
+                startEdge:10,
+                endEdge:12
             },
             {
                 operand:0,
