@@ -221,7 +221,7 @@ if(debugMode){
 
                         testVars.obtained[operand].name = testVars.args.name != undefined?testVars.args.name:array[1].uuid;
 
-                        assert.ok(edges.byName[testVars.obtained[operand].name],testNo+') '+'byName-test1:edgeName');
+                        assert.ok(edges.byName[testVars.obtained[operand].name],operand+','+testNo+') '+'byName-test1:edgeName');
 
                         var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
                         prev_priority != undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
@@ -230,37 +230,37 @@ if(debugMode){
                         expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained[operand].name].timestamp:expectedPriority);
                         testVars.obtained[operand].priority = edges.byName[testVars.obtained[operand].name].priority;
 
-                        assert.equal(testVars.obtained[operand].priority,expectedPriority,testNo+') '+'byName-test2:priority');
+                        assert.equal(testVars.obtained[operand].priority,expectedPriority,operand+','+testNo+') '+'byName-test2:priority');
                         testOperands[operand].sortedPriorities.add(expectedPriority);
 
-                        (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,testNo+') '+'Priority modified');
+                        (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,operand+','+testNo+') '+'Priority modified');
 
-                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained[operand].name) > -1,testNo+') '+'byPriority object');
+                        assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained[operand].name) > -1,operand+','+testNo+') '+'byPriority object');
 
-                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) == -1,testNo+') '+'byPriority object - old priority is gone');
-                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),testNo+') '+'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
+                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) == -1,operand+','+testNo+') '+'byPriority object - old priority is gone');
+                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
 
                         testVars.obtained[operand].path = testOperands[operand].path+'/'+testVars.obtained[operand].name;
-                        
-                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,array[1].uuid,testNo+') '+"edge-path's uuid");
-                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,testNo+') '+"edge-path's uuid");
+
+                        array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,array[1].uuid,operand+','+testNo+') '+"edge-path's uuid");
+                        !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,operand+','+testNo+') '+"edge-path's uuid");
 
                     } else {
 
                         var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].name:undefined;
                         var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
-                        assert.ok(deletedEdgeName,testNo+') '+"There's an edge to delete");
-                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",testNo+') '+'Deleted edge had a priority');
+                        assert.ok(deletedEdgeName,operand+','+testNo+') '+"There's an edge to delete");
+                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",operand+','+testNo+') '+'Deleted edge had a priority');
 
                         edges.byPriority[deletedPriority].length == 0 && (testOperands[operand].sortedPriorities.delete(deletedPriority));
 
-                        assert.ok(!edges.byName[deletedEdgeName],testNo+') '+'byName object');
+                        assert.ok(!edges.byName[deletedEdgeName],operand+','+testNo+') '+'byName object');
 
-                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,testNo+') '+'byPriority object');
-                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),testNo+') '+'lowest priority');
-                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
-                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[operand].path+'/'+deletedEdgeName).val,undefined,testNo+') '+'edge-path removed');
+                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,operand+','+testNo+') '+'byPriority object');
+                        assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
+                        assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
+                        assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[operand].path+'/'+deletedEdgeName).val,undefined,operand+','+testNo+') '+'edge-path removed');
 
                     }
 
@@ -468,7 +468,8 @@ if(debugMode){
             }
         ];
 
-        //TODO: tests for edges poiting to the same vertex
+        //TODO: tests for edges pointing to the same vertex
+        //TODO: edges with deeper paths
 
         for(var testSeqN=0;testSeqN<testSequence.length;testSeqN++){
 
