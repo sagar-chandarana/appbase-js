@@ -215,6 +215,7 @@ if(debugMode){
             var expectEvent =function(event){
                 (event == 'add') && expect(noOfExpectations += 2);
                 (event == 'remove') && expect(noOfExpectations += 2);
+                (event == 'move') && expect(noOfExpectations += 2);
 
                 !testOperands[operand].eventsExpected[event]  && (testOperands[operand].eventsExpected[event] = []);
                 testOperands[operand].eventsExpected[event].push(testNo);
@@ -529,6 +530,15 @@ if(debugMode){
                     assert.equal(error,'',operand+','+testNo+') '+'error aayo');
                 });
                 */
+            })
+
+            testOperands[operand].ref.edges.on('edge_moved',function(error,edgeRef,snap){
+                var testNo = testOperands[operand].eventsExpected.move.shift();
+                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.equal(error,false,operand+','+testNo+') '+'Event: edge_moved:'+edgeRef.path());
+                //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
+                //TODO: snapshot
+
             })
 
         }
