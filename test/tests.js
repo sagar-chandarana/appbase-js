@@ -242,6 +242,7 @@ if(debugMode){
                         assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),testNo+') '+'highest priority');
 
                         testVars.obtained[operand].path = testOperands[operand].path+'/'+testVars.obtained[operand].name;
+                        
                         array[1] && assert.equal(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,array[1].uuid,testNo+') '+"edge-path's uuid");
                         !array[1] && assert.ok(Appbase.debug.ab.caching.get('path_uuid',testVars.obtained[operand].path).val,testNo+') '+"edge-path's uuid");
 
@@ -436,9 +437,8 @@ if(debugMode){
         testOperands[1].sortedPriorities = new SortedSet();
 
         testOperands[2] = {};
-        testOperands[2].refFromTest = {operand:1,testNo:9};
+        testOperands[2].refFromTest = {operand:1,testNo:8};
         testOperands[2].sortedPriorities = new SortedSet();
-
 
         var testSequence = [
             {
@@ -452,6 +452,11 @@ if(debugMode){
                 endEdge:9
             },
             {
+                operand:2,
+                startEdge:0,
+                endEdge:12
+            },
+            {
                 operand:1,
                 startEdge:10,
                 endEdge:12
@@ -462,6 +467,8 @@ if(debugMode){
                 endEdge:12
             }
         ];
+
+        //TODO: tests for edges poiting to the same vertex
 
         for(var testSeqN=0;testSeqN<testSequence.length;testSeqN++){
 
