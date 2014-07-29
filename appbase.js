@@ -943,7 +943,8 @@ Appbase = {
                 }
 
                 //TODO: amplify returns 1) listener name and 2)event name in the callback: stop that for user events
-                amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex),ab.firing.edgeSnapshot(edgeData)); //TODO: extras (name,priority)
+                edgeData && amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex),ab.firing.edgeSnapshot(edgeData));
+                !edgeData && amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex));
             };
         }
 

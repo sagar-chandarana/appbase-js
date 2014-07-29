@@ -41,7 +41,7 @@ var amplify = global.amplify = {
 		topicSubscriptions = subscriptions[ topic ].slice();
 		for ( length = topicSubscriptions.length; i < length; i++ ) {
 			subscription = topicSubscriptions[ i ];
-			ret = subscription.callback.apply( null, args.concat([topic,subscription.name]) );
+			ret = subscription.callback.apply( null, args );
 			if ( ret === false ) {
 				break;
 			}
