@@ -683,7 +683,9 @@ Appbase = {
                             resolve();
 
                             toBeFired.forEach(function(args){
-                                ab.firing.fire.apply(null,args);
+                                setTimeout(function(){
+                                    ab.firing.fire.apply(null,args);
+                                },0);
                             });
 
                         }

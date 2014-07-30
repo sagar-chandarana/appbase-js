@@ -207,11 +207,6 @@ if(debugMode){
                 testOperands[operand].ref = Appbase.ref(testOperands[operand].path);
             }
 
-            if(!testOperands[operand].eventsExpected){
-                testOperands[operand].eventsExpected = {};
-                testEvents(operand);
-            }
-
             var expectEvent =function(event){
                 (event === 'add') && expect(noOfExpectations += 2);
                 (event === 'remove') && expect(noOfExpectations += 2);
@@ -219,24 +214,9 @@ if(debugMode){
 
                 !testOperands[operand].eventsExpected[event]  && (testOperands[operand].eventsExpected[event] = []);
                 testOperands[operand].eventsExpected[event].push(testNo);
+                QUnit.stop();
             }
 
-            switch(testVars.type){
-                case 'replace':
-                    expectEvent('remove');
-                    expectEvent('add');
-                    break;
-
-                case 'add':
-                case 'remove':
-                case 'move':
-                    expectEvent(testVars.type);
-                    break;
-
-                default :
-                    throw ("Shouldn't be here");
-                    break;
-            }
 
             !testVars.obtained && (testVars.obtained = {});
             !testVars.obtained[operand] && (testVars.obtained[operand] = {});
@@ -303,6 +283,30 @@ if(debugMode){
                 });
 
             });
+
+
+            if(!testOperands[operand].eventsExpected){
+                testOperands[operand].eventsExpected = {};
+                testEvents(operand);
+            }
+
+
+            switch(testVars.type){
+                case 'replace':
+                    expectEvent('remove');
+                    expectEvent('add');
+                    break;
+
+                case 'add':
+                case 'remove':
+                case 'move':
+                    expectEvent(testVars.type);
+                    break;
+
+                default :
+                    throw ("Shouldn't be here");
+                    break;
+            }
         }
 
         var edgesToTest = [];
@@ -514,6 +518,7 @@ if(debugMode){
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].obtained.name,"Fired ref's path is as expected");
                 //TODO: snapshot
 
+                QUnit.start();
             })
 
             testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
@@ -522,7 +527,7 @@ if(debugMode){
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
                 //TODO: snapshot
-
+                QUnit.start();
                 /*
                 Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(edgesToTest[testNo].args.ref.path())]).then(function(vertexes){
                     assert.deepEqual(vertexes[0],vertexes[1],operand+','+testNo+') '+'Fired refs point to proper vertex');
@@ -538,7 +543,7 @@ if(debugMode){
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_moved:'+edgeRef.path());
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
                 //TODO: snapshot
-
+                QUnit.start();
             })
 
         }
