@@ -190,7 +190,7 @@ Appbase = {
         ab.network.edges.listen = function(path,request,callback){
             if(!edges[path]) {
                 edges[path] = { request: request };
-                var req = { timestamp: request.timestamp, data: request.names, filters: request.filters };
+                var req = { timestamp: request.timestamp, data: request.names, filters: request.filters, reverse: request.reverse };
 
                 var listen = function() {
                     if(paths[path]) {
@@ -253,7 +253,7 @@ Appbase = {
         }
 
         ab.network.edges.get = function(path, request,callback){
-            var req = { timestamp: request.timestamp, data: request.names, filters: request.filters };
+            var req = { timestamp: request.timestamp, data: request.names, filters: request.filters, reverse: request.reverse };
 
             process(atomic.post(path + '/~edges', req), callback);
 
