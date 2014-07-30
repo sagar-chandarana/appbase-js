@@ -55,10 +55,6 @@
     return callbacks;
   };
 
-  exports['get'] = function (src) {
-    return xhr('GET', src);
-  };
-
   exports['post'] = function (url, data) {
     return xhr('POST', url, data);
   };

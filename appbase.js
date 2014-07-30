@@ -74,38 +74,45 @@ Appbase = {
     }
 
     ab.network.init = function() {
+        var process = function(request, callback, listen) {
+            request
+            .success(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(string));
+                } else {
+                    callback(null, data);
+                    if(typeof listen === 'function') {
+                        listen();
+                    }
+                }
+            })
+            .error(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(data));
+                } else if(data && typeof data.message === 'string') {
+                    callback(new Error(data.message));
+                } else {
+                    callback(new Error('Unknown Error'));
+                    console.log(data);
+                }
+            });
+        }
+
         var paths = {};
+        var edges = {};
 
         ab.network.server = 'http://162.242.213.228:3000/';
 
         ab.network.properties = {};
 
-        ab.network.properties.listen = function(request,callback){
+        ab.network.properties.listen = function(path,request,callback){
             if(!paths[path]) {
                 paths[path] = { request: request };
                 var req = { timestamp: request.timestamp, all: true };
 
                 var listen = function() {
                     if(paths[path]) {
-                        atomic.post(request.path + '/~properties', req)
-                        .success(function(data) {
-                            if(typeof data === 'string') {
-                                callback(new Error(string));
-                            } else {
-                                callback(null, data);
-                                listen();
-                            }
-                        })
-                        .error(function(data) {
-                            if(typeof data === 'string') {
-                                callback(new Error(data));
-                            } else if(data && typeof data.message === 'string') {
-                                callback(new Error(data.message));
-                            } else {
-                                callback(new Error('Unknown Error'));
-                                console.log(data);
-                            }
-                        });
+                        process(atomic.post(path + '/~properties', req), callback, listen);
                     }
                 };
 
@@ -127,27 +134,10 @@ Appbase = {
              */
         }
 
-        ab.network.properties.get = function(request,callback){
+        ab.network.properties.get = function(path, request,callback){
             var req = { timestamp: request.timestamp, all: true };
 
-            atomic.post(request.path + '/~properties', req)
-            .success(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(string));
-                } else {
-                    callback(null, data);
-                }
-            })
-            .error(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(data));
-                } else if(data && typeof data.message === 'string') {
-                    callback(new Error(data.message));
-                } else {
-                    callback(new Error('Unknown Error'));
-                    console.log(data);
-                }
-            });
+            process(atomic.post(path + '/~properties', req), callback);
 
             /*
                 Same as listen, but listen only once and when the data arrives, cut off the connection.
@@ -170,25 +160,7 @@ Appbase = {
         ab.network.properties.patch = function(path,data,timestamp,callback){
             var req = { timestamp: timestamp, data: data };
 
-            atomic.patch(request.path + '/~properties', req)
-            .success(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(string));
-                } else {
-                    callback(null, data);
-                }
-            })
-            .error(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(data));
-                } else if(data && typeof data.message === 'string') {
-                    callback(new Error(data.message));
-                } else {
-                    callback(new Error('Unknown Error'));
-                    console.log(data);
-                }
-            });
-
+            process(atomic.patch(request.path + '/~properties', req), callback);
             /*
                 timestamp in request for strong PATCH.
 
@@ -203,24 +175,7 @@ Appbase = {
         ab.network.properties.remove = function(path,names,all,callback){
             var req = { data: names, all: all };
 
-            atomic.delete(request.path + '/~properties', req)
-            .success(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(string));
-                } else {
-                    callback(null, data);
-                }
-            })
-            .error(function(data) {
-                if(typeof data === 'string') {
-                    callback(new Error(data));
-                } else if(data && typeof data.message === 'string') {
-                    callback(new Error(data.message));
-                } else {
-                    callback(new Error('Unknown Error'));
-                    console.log(data);
-                }
-            });
+            process(atomic.delete(request.path + '/~properties', req), callback);
 
             /*
 
@@ -231,6 +186,142 @@ Appbase = {
                     *  obj - with timestamp, _id, and fields just deleted with an empty string (example: if field 'xyz' was deleted { _id: something, timestamp: something, xyz: ''})
              */
         }
+
+        ab.network.edges.listen = function(path,request,callback){
+            if(!edges[path]) {
+                edges[path] = { request: request };
+                var req = { timestamp: request.timestamp, data: request.names, filters: request.filters };
+
+                var listen = function() {
+                    if(paths[path]) {
+                        process(atomic.post(path + '/~edges', req), callback, listen);
+                    }
+                };
+
+                listen();
+            }
+
+            /*
+                Listen for edges on a path
+                 - request parameters - a JSON object
+                   * timestamp
+                   * names
+                   * filters
+
+                   names has priority over filters, i.e. if you give names, filters willbe ignored. names is an arrya of names
+                   filters object contains startAt, endAt, skip, limit
+                   empty filters object gets all edges
+
+                   using names, you can bulk get edges, along with vertex data. like this
+                   {
+                        _id: something
+                        edges: {
+                            edgename1: {
+                                vertex: {
+                                    _id:
+                                    timestamp:
+                                    property1:
+                                    property2:
+                                }
+                                timestamp:
+                                order:
+                            }
+                            ...
+                        }
+                        optype:
+                   }
+
+                   using filters
+                   {
+                        _id: something
+                        edges: {
+                            edgename1: {
+                                t_id:
+                                timestamp:
+                                order:
+                            }
+                            ...
+                        }
+                        optype:
+                   }
+
+                 - callback - called whenever the data arrives
+                    arguments:
+                   * error - eg. vertex not found/network error
+                   * obj - an object with properties vertex and optype
+             */
+        }
+
+        ab.network.edges.get = function(path, request,callback){
+            var req = { timestamp: request.timestamp, data: request.names, filters: request.filters };
+
+            process(atomic.post(path + '/~edges', req), callback);
+
+            /*
+                Same as listen, but listen only once and when the data arrives, cut off the connection.
+                Callback is called only once.
+             */
+        }
+
+        ab.network.edges.isListening = function(path){
+            if(edges[path]) return true; else return false;
+        }
+
+        ab.network.edges.stop = function(path){
+            delete edges[path];
+
+            /*
+                Stop listening for properties on a path
+             */
+        }
+
+        ab.network.edges.patch = function(path,data,callback){
+            var req = { data: data };
+
+            process(atomic.patch(request.path + '/~edges', req), callback);
+
+            /*
+                Rest PATCH equivalent
+
+                data will be of the form
+                {
+                    data: {
+                        edgesname1: {
+                            path: path of vertex to point to
+                            order: order to put. this is optional. if this is not given no orderis set. if it is null, timestamp of server will be set as order
+                        }
+                    }
+                }
+
+                return object
+                {
+                    _id
+                    edgesname1: {
+                        t_id:
+                        timestamp:
+                        order:
+                    }
+                }
+             */
+        }
+
+        ab.network.edges.remove = function(path,names,all,callback){
+            var req = { data: names, all: all };
+
+            process(atomic.delete(request.path + '/~edges', req));
+
+            /*
+                names is array of names of edges to remove
+                all means remove all edges
+
+                Rest DELETE equivalent
+                - callback
+                   arguments:
+                    *  error
+                    *  obj - with timestamp, _id, and fields just deleted with an empty string (example: if field 'xyz' was deleted { _id: something, timestamp: something, xyz: ''})
+             */
+        }
+
 
     }
 
