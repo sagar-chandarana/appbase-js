@@ -74,11 +74,44 @@ Appbase = {
     }
 
     ab.network.init = function() {
+        var paths = {};
+
         ab.network.server = 'http://162.242.213.228:3000/';
 
         ab.network.properties = {};
 
         ab.network.properties.listen = function(request,callback){
+            if(!paths[path]) {
+                paths[path] = { request: request };
+                var req = { timestamp: request.timestamp, all: true };
+
+                var listen = function() {
+                    if(paths[path]) {
+                        atomic.post(request.path + '/~properties', req)
+                        .success(function(data) {
+                            if(typeof data === 'string') {
+                                callback(new Error(string));
+                            } else {
+                                callback(null, data);
+                                listen();
+                            }
+                        })
+                        .error(function(data) {
+                            if(typeof data === 'string') {
+                                callback(new Error(data));
+                            } else if(data && typeof data.message === 'string') {
+                                callback(new Error(data.message));
+                            } else {
+                                callback(new Error('Unknown Error'));
+                                console.log(data);
+                            }
+                        });
+                    }
+                };
+
+                listen();
+            }
+
             /*
                 Listen for properties on a path
                  - request parameters - a JSON object
@@ -88,13 +121,34 @@ Appbase = {
                  - callback - called whenever the data arrives
                     arguments:
                    * error - eg. vertex not found/network error
-                   * vertex - vertex object with properties
+                   * obj - an object with properties vertex and optype
 
                  This method filters out multiple requests on a single path. I.E. it keeps track of all the paths being listened and it simply ignores if a path is already being listened.
              */
         }
 
         ab.network.properties.get = function(request,callback){
+            var req = { timestamp: request.timestamp, all: true };
+
+            atomic.post(request.path + '/~properties', req)
+            .success(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(string));
+                } else {
+                    callback(null, data);
+                }
+            })
+            .error(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(data));
+                } else if(data && typeof data.message === 'string') {
+                    callback(new Error(data.message));
+                } else {
+                    callback(new Error('Unknown Error'));
+                    console.log(data);
+                }
+            });
+
             /*
                 Same as listen, but listen only once and when the data arrives, cut off the connection.
                 Callback is called only once.
@@ -102,34 +156,79 @@ Appbase = {
         }
 
         ab.network.properties.isListening = function(path){
-            /*
-                Returns a boolean, whether a path is being listened or not
-             */
+            if(paths[path]) return true; else return false;
         }
 
         ab.network.properties.stop = function(path){
+            delete paths[path];
+
             /*
                 Stop listening for properties on a path
              */
         }
 
-        ab.network.properties.patch = function(path,vertex,callback){
+        ab.network.properties.patch = function(path,data,timestamp,callback){
+            var req = { timestamp: timestamp, data: data };
+
+            atomic.patch(request.path + '/~properties', req)
+            .success(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(string));
+                } else {
+                    callback(null, data);
+                }
+            })
+            .error(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(data));
+                } else if(data && typeof data.message === 'string') {
+                    callback(new Error(data.message));
+                } else {
+                    callback(new Error('Unknown Error'));
+                    console.log(data);
+                }
+            });
+
             /*
+                timestamp in request for strong PATCH.
+
                 Rest PATCH equivalent
                 - callback
                    arguments:
                     *  error
-                    *  timestamp - returned from server
+                    *  obj - with timestamp, _id, and fields just inserted
              */
         }
 
-        ab.network.properties.put = function(path,vertex,callback){
+        ab.network.properties.remove = function(path,names,all,callback){
+            var req = { data: names, all: all };
+
+            atomic.delete(request.path + '/~properties', req)
+            .success(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(string));
+                } else {
+                    callback(null, data);
+                }
+            })
+            .error(function(data) {
+                if(typeof data === 'string') {
+                    callback(new Error(data));
+                } else if(data && typeof data.message === 'string') {
+                    callback(new Error(data.message));
+                } else {
+                    callback(new Error('Unknown Error'));
+                    console.log(data);
+                }
+            });
+
             /*
-             Rest PUT equivalent
-             - callback
-               arguments:
-                 *  error
-                 *  timestamp - returned from server
+
+                Rest DELETE equivalent
+                - callback
+                   arguments:
+                    *  error
+                    *  obj - with timestamp, _id, and fields just deleted with an empty string (example: if field 'xyz' was deleted { _id: something, timestamp: something, xyz: ''})
              */
         }
 
