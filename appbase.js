@@ -682,11 +682,11 @@ Appbase = {
 
                             resolve();
 
+
                             toBeFired.forEach(function(args){
-                                setTimeout(function(){
-                                    ab.firing.fire.apply(null,args);
-                                },0);
+                                ab.firing.fire.apply(null,args);
                             });
+
 
                         }
 
@@ -921,55 +921,78 @@ Appbase = {
 
         ab.firing.fire = function(event,uuid,vertex,edgeData){
             var ref;
+            var vertexSnapshot = ab.firing.vertexSnapshot(vertex);
+            var edgeSnapshot = edgeData? ab.firing.edgeSnapshot(edgeData):undefined;
 
             var paths = ab.graph.uuid_paths.getSync(uuid);
             for(var path in paths){
 
-                switch(event){
+                setTimeout(function(path){
+                    return function(){
 
-                    case "properties":
+                        switch(event){
 
-                        ref  = Appbase.ref(path,true);
-                        break;
+                            case "properties":
 
-                    case "edge_added":
-                    case "edge_removed":
-                    case "edge_changed":
-                    case "edge_moved":
-                        ref  = Appbase.ref(path+'/'+edgeData.edgeName,true);
-                        break;
+                                ref  = Appbase.ref(path,true);
+                                break;
 
-                    default:
-                        throw ('Wrong event.');
+                            case "edge_added":
+                            case "edge_removed":
+                            case "edge_changed":
+                            case "edge_moved":
+                                ref  = Appbase.ref(path+'/'+edgeData.edgeName,true);
+                                break;
 
-                }
+                            default:
+                                throw ('Wrong event.');
 
-                //TODO: amplify returns 1) listener name and 2)event name in the callback: stop that for user events
-                edgeData && amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex),ab.firing.edgeSnapshot(edgeData));
-                !edgeData && amplify.publish(event+':'+path,false,ref,ab.firing.vertexSnapshot(vertex));
+                        }
+
+                        //!edgeData && console.log('firing');
+                        edgeData && amplify.publish(event+':'+path,false,ref,vertexSnapshot,edgeSnapshot);
+                        !edgeData && amplify.publish(event+':'+path,false,ref,vertexSnapshot);
+                   }
+                }(path),0);
+
             };
         }
 
         ab.firing.properties = {};
         ab.firing.properties.on = function(path,name,callback){
-            var listenerName = amplify.subscribe('properties:'+path,name,callback);
+            var listenerName = listenerName !== undefined? listenerName:ab.util.uuid();
 
             ab.graph.path_vertex.get(path)
             .then(function(vertex){
-                callback(false,Appbase.ref(path,true),ab.firing.vertexSnapshot(vertex));
+                    var vertexSnapshot = ab.firing.vertexSnapshot(vertex);
+                setTimeout(function(){
+                    //console.log('added');
+                    amplify.subscribe('properties:'+path,name,callback);
+                    callback(false,Appbase.ref(path,true),vertexSnapshot);
+                },0);
 
             },function(error){
-                amplify.unsubscribe('properties:'+path,listenerName);
+                //amplify.unsubscribe('properties:'+path,listenerName);
                 callback(error);
             });
 
         }
 
         ab.firing.properties.off = function(path,name){
-            return amplify.unsubscribe('properties:'+path,name); // todo: stop listening, clear from RAM
+            //TODO:
+            setTimeout(function(){
+                //console.log('removing',name);
+                return amplify.unsubscribe('properties:'+path,name); // todo: stop listening, clear from RAM
+            },0);
         }
 
         ab.firing.edges = {};
+
+        ab.firing.edges.off = function(event,path,name){
+            //console.log('removing',name);
+            //console.log('removed',);
+            amplify.unsubscribe(event+':'+path,name)
+        }
 
         ab.firing.edges.on = function(event,path,name,options,callback){
             //todo: check event
@@ -987,55 +1010,91 @@ Appbase = {
                 throw "Invalid arguments."
             }
 
-            var listenerName = amplify.subscribe(event+':'+path,name,callback);
+            var name = name !== undefined? name:ab.util.uuid();
 
             ab.graph.path_out_edges.get(path)  //TODO: provide startAt,endAt
             .then(function(edges){
-                    if(event === "edge_added"){
-                        //fire for existing edges
+                if(event === "edge_added"){
+                    //fire for existing edges
 
 
-                        //todo: reverse, skip
+                    //todo: reverse, skip
 
-                        var startAt = options && typeof options.startAt === 'number'? (edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt).value).index: undefined):0;
-                        var endAt = options && typeof options.endAt === 'number'? (edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt).value).index+1: undefined):edges.sortedPriorities.length; //inclusive
+                    var startAt = options && typeof options.startAt === 'number'? (edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt).value).index: undefined):0;
+                    var endAt = options && typeof options.endAt === 'number'? (edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt).value).index+1: undefined):edges.sortedPriorities.length; //inclusive
 
-                        if(startAt > endAt){
-                            //swap
-                            startAt = startAt + endAt;
-                            endAt = startAt - endAt;
-                            startAt = startAt - endAt;
+                    if(startAt > endAt){
+                        //swap
+                        startAt = startAt + endAt;
+                        endAt = startAt - endAt;
+                        startAt = startAt - endAt;
 
-                            //reverse = true;
-                        }
-
-                        var priorities = (startAt !== undefined && endAt !== undefined)? edges.sortedPriorities.slice(startAt,endAt):[];
-
-                        for(var i = 0; (i< priorities.length) ;i++){
-                            var priority = priorities[i];
-
-                            edges.byPriority[priority].forEach(function(edgeName){
-                                var edgePath = path+'/'+edgeName;
-
-                                if(options && options.noData){
-                                    callback(false,Appbase.ref(edgePath,true));
-                                } else {
-                                    ab.graph.path_vertex.get(edgePath).then(function(vertex){
-                                        callback(false,Appbase.ref(edgePath),ab.firing.vertexSnapshot(vertex)); //todo: name and extra data
-                                    },callback);
-                                }
-                            })
-
-                        }
-
-                    } else if (event === 'edge_changed'){
-                        //todo: think: need anything special?
+                        //reverse = true;
                     }
 
+                    var priorities = (startAt !== undefined && endAt !== undefined)? edges.sortedPriorities.slice(startAt,endAt):[];
+
+                    for(var i = 0; (i< priorities.length) ;i++){
+                        var priority = priorities[i];
+
+                        edges.byPriority[priority].forEach(function(edgeName,j){
+                            var edgePath = path+'/'+edgeName;
+
+                            if(options && options.noData){
+                                setTimeout(function(edgePath,i,j){
+                                    return function(){
+
+                                        if(i === priorities.length -1 && j === edges.byPriority[priority].length -1 ){
+                                            //console.log('added');
+                                            amplify.subscribe(event+':'+path,name,callback);
+                                        }
+
+                                        callback(false,Appbase.ref(edgePath));
+
+                                    }
+                                }(edgePath,i,j),0);
+
+
+
+                            } else {
+                                ab.graph.path_vertex.get(edgePath).then(function(vertex){
+                                    setTimeout(function(edgePath,i,j){
+                                        return function(){
+
+                                            if(i === priorities.length -1 && j === edges.byPriority[priority].length -1 ){
+                                                //console.log('added');
+                                                amplify.subscribe(event+':'+path,name,callback);
+                                            }
+
+                                            callback(false,Appbase.ref(edgePath),ab.firing.vertexSnapshot(vertex)); //todo: name and extra data
+                                        }
+                                    }(edgePath,i,j),0);
+
+
+
+                                },callback);
+                            }
+                        })
+
+                    }
+
+
+
+                } else{
+                    amplify.subscribe(event+':'+path,name,callback);
+                    //todo: think: need anything special?
+                }
+
+                //out(function(){
+                     // at the end of the stack
+                //},0);
+
             },function(error){
-                amplify.unsubscribe(event+':'+path,listenerName);
+                //amplify.unsubscribe(event+':'+path,listenerName);
                 callback(error);
             });
+
+            return name;
         }
     }
 
@@ -1122,7 +1181,13 @@ Appbase = {
             }
 
             exports.edges.on = function(event,name,options,callback){
-                return ab.firing.edges.on(event,priv.path,name,options,callback);
+                var lName = ab.firing.edges.on(event,priv.path,name,options,callback);
+                //console.log(lName);
+                return lName;
+            }
+
+            exports.edges.off = function(event,name){
+                return ab.firing.edges.off(event,priv.path,name);
             }
 
             exports.properties.on = function(name,callback){
