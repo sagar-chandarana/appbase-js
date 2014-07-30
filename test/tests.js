@@ -194,13 +194,13 @@ if(debugMode){
 
         var noOfExpectations = 0;
         var testEdge = function(operand,testNo,testVars){
-            (testVars.type == 'replace' ||  testVars.type == 'move' || testVars.type == 'remove') && (testVars.args.name = testVars.args.name != undefined? testVars.args.name: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.name:undefined));
-            (testVars.type == 'replace' || ((testVars.type == 'remove' ||  testVars.type == 'move') && testVars.args.name == undefined)) && (testVars.args.ref = testVars.args.ref!= undefined? testVars.args.ref: (testVars.basedOn != undefined?edgesToTest[testVars.basedOn].args.ref:undefined));
-            (testVars.type == 'add' && testVars.args.priority == undefined) && (testVars.args.priority = 'time');
+            (testVars.type === 'replace' ||  testVars.type === 'move' || testVars.type === 'remove') && (testVars.args.name = testVars.args.name !== undefined? testVars.args.name: (testVars.basedOn !== undefined?edgesToTest[testVars.basedOn].args.name:undefined));
+            (testVars.type === 'replace' || ((testVars.type === 'remove' ||  testVars.type === 'move') && testVars.args.name === undefined)) && (testVars.args.ref = testVars.args.ref!== undefined? testVars.args.ref: (testVars.basedOn !== undefined?edgesToTest[testVars.basedOn].args.ref:undefined));
+            (testVars.type === 'add' && testVars.args.priority === undefined) && (testVars.args.priority = 'time');
 
-            (testVars.type == "remove") && expect(noOfExpectations += 8);
-            (testVars.type == "add" || testVars.type == "replace") &&  expect(noOfExpectations += 7);
-            (testVars.type == "move") && expect(noOfExpectations += 9);
+            (testVars.type === "remove") && expect(noOfExpectations += 8);
+            (testVars.type === "add" || testVars.type === "replace") &&  expect(noOfExpectations += 7);
+            (testVars.type === "move") && expect(noOfExpectations += 9);
 
             if(!testOperands[operand].ref){
                 testOperands[operand].path = edgesToTest[testOperands[operand].refFromTest.testNo].obtained[testOperands[operand].refFromTest.operand].path;
@@ -213,9 +213,9 @@ if(debugMode){
             }
 
             var expectEvent =function(event){
-                (event == 'add') && expect(noOfExpectations += 2);
-                (event == 'remove') && expect(noOfExpectations += 2);
-                (event == 'move') && expect(noOfExpectations += 2);
+                (event === 'add') && expect(noOfExpectations += 2);
+                (event === 'remove') && expect(noOfExpectations += 2);
+                (event === 'move') && expect(noOfExpectations += 2);
 
                 !testOperands[operand].eventsExpected[event]  && (testOperands[operand].eventsExpected[event] = []);
                 testOperands[operand].eventsExpected[event].push(testNo);
@@ -244,30 +244,30 @@ if(debugMode){
             testOperands[operand].ref.edges[testVars.method](testVars.args,function(error){
                 assert.equal(error,false,operand+','+testNo+') '+testVars.testName);
 
-                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperands[operand].path),testVars.args.ref != undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
+                Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperands[operand].path),testVars.args.ref !== undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
                 .then(function(array){
                     var edges = array[0];
-                    if(testVars.type != "remove"){
+                    if(testVars.type !== "remove"){
 
-                        testVars.obtained[operand].name = testVars.args.name != undefined?testVars.args.name:array[1].uuid;
+                        testVars.obtained[operand].name = testVars.args.name !== undefined?testVars.args.name:array[1].uuid;
 
                         assert.ok(edges.byName[testVars.obtained[operand].name],operand+','+testNo+') '+'byName-test1:edgeName');
 
-                        var prev_priority = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
-                        prev_priority != undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
+                        var prev_priority = testVars.basedOn !== undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
+                        prev_priority !== undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
 
-                        var expectedPriority = testVars.args.priority != undefined? testVars.args.priority:prev_priority;
-                        expectedPriority = (expectedPriority == "time"? edges.byName[testVars.obtained[operand].name].timestamp:expectedPriority);
+                        var expectedPriority = testVars.args.priority !== undefined? testVars.args.priority:prev_priority;
+                        expectedPriority = (expectedPriority === "time"? edges.byName[testVars.obtained[operand].name].timestamp:expectedPriority);
                         testVars.obtained[operand].priority = edges.byName[testVars.obtained[operand].name].priority;
 
                         assert.equal(testVars.obtained[operand].priority,expectedPriority,operand+','+testNo+') '+'byName-test2:priority');
                         testOperands[operand].sortedPriorities.add(expectedPriority);
 
-                        (testVars.type == "move") && assert.notEqual(prev_priority,expectedPriority,operand+','+testNo+') '+'Priority modified');
+                        (testVars.type === "move") && assert.notEqual(prev_priority,expectedPriority,operand+','+testNo+') '+'Priority modified');
 
                         assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained[operand].name) > -1,operand+','+testNo+') '+'byPriority object');
 
-                        (testVars.type == "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) == -1,operand+','+testNo+') '+'byPriority object - old priority is gone');
+                        (testVars.type === "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) === -1,operand+','+testNo+') '+'byPriority object - old priority is gone');
                         assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
                         assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
 
@@ -278,20 +278,20 @@ if(debugMode){
 
                     } else {
 
-                        var deletedEdgeName = testVars.basedOn != undefined? edgesToTest[testVars.basedOn].obtained[operand].name:undefined;
-                        var deletedPriority = testVars.basedOn!= undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
+                        var deletedEdgeName = testVars.basedOn !== undefined? edgesToTest[testVars.basedOn].obtained[operand].name:undefined;
+                        var deletedPriority = testVars.basedOn!== undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
                         assert.ok(deletedEdgeName,operand+','+testNo+') '+"There's an edge to delete");
-                        assert.ok(deletedPriority != undefined && typeof deletedPriority == "number",operand+','+testNo+') '+'Deleted edge had a priority');
+                        assert.ok(deletedPriority !== undefined && typeof deletedPriority === "number",operand+','+testNo+') '+'Deleted edge had a priority');
 
                         !edgesToTest[testNo].deleted && (edgesToTest[testNo].deleted = {});
                         edgesToTest[testNo].deleted.name = deletedEdgeName;
                         edgesToTest[testNo].deleted.priority = deletedPriority;
 
-                        edges.byPriority[deletedPriority].length == 0 && (testOperands[operand].sortedPriorities.delete(deletedPriority));
+                        edges.byPriority[deletedPriority].length === 0 && (testOperands[operand].sortedPriorities.delete(deletedPriority));
 
                         assert.ok(!edges.byName[deletedEdgeName],operand+','+testNo+') '+'byName object');
 
-                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) == -1,operand+','+testNo+') '+'byPriority object');
+                        assert.ok(edges.byPriority[deletedPriority].indexOf(deletedEdgeName) === -1,operand+','+testNo+') '+'byPriority object');
                         assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
                         assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
                         assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[operand].path+'/'+deletedEdgeName).val,undefined,operand+','+testNo+') '+'edge-path removed');
@@ -509,7 +509,7 @@ if(debugMode){
 
             testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.add.shift();
-                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_added:'+edgeRef.path());
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].obtained.name,"Fired ref's path is as expected");
                 //TODO: snapshot
@@ -518,7 +518,7 @@ if(debugMode){
 
             testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.remove.shift();
-                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
                 //TODO: snapshot
@@ -534,7 +534,7 @@ if(debugMode){
 
             testOperands[operand].ref.edges.on('edge_moved',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
                 var testNo = testOperands[operand].eventsExpected.move.shift();
-                assert.ok(testNo!= undefined,operand+','+testNo+') '+'Event was expected to fire');
+                assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_moved:'+edgeRef.path());
                 //TODO: test edge path  assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted.name,"Fired ref's path is as expected");
                 //TODO: snapshot

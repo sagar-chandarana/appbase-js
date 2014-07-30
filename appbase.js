@@ -31,11 +31,11 @@ Appbase = {
     }
 
     ab.util.cutLeadingTrailingSlashes = function(path){
-        while(path.charAt(path.length - 1) == '/') {
+        while(path.charAt(path.length - 1) === '/') {
             path = path.slice(0,-1);
         }
 
-        while(path.charAt(0) == '/') {
+        while(path.charAt(0) === '/') {
             path = path.slice(1);
         }
 
@@ -44,27 +44,27 @@ Appbase = {
 
     ab.util.front = function(path){
         path = ab.util.cutLeadingTrailingSlashes(path);
-        return path.indexOf('/') == -1? path: path.slice(0,path.indexOf('/'));
+        return path.indexOf('/') === -1? path: path.slice(0,path.indexOf('/'));
     }
 
     ab.util.cutFront = function(path){
         path = ab.util.cutLeadingTrailingSlashes(path);
-        return path.indexOf('/') == -1? '': path.slice(path.indexOf('/')+1);
+        return path.indexOf('/') === -1? '': path.slice(path.indexOf('/')+1);
     }
 
     ab.util.back = function(path){
         path = ab.util.cutLeadingTrailingSlashes(path);
-        return path.lastIndexOf('/') == -1? path: path.slice(path.lastIndexOf('/')+1);
+        return path.lastIndexOf('/') === -1? path: path.slice(path.lastIndexOf('/')+1);
     }
 
     ab.util.cutBack = function(path){
         path = ab.util.cutLeadingTrailingSlashes(path);
-        return path.lastIndexOf('/') == -1? '': path.slice(0,path.lastIndexOf('/'));
+        return path.lastIndexOf('/') === -1? '': path.slice(0,path.lastIndexOf('/'));
     }
 
     ab.util.uuid = function (){
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+            var r = Math.random()*16|0, v = c === 'x' ? r : (r&0x3|0x8);
             return v.toString(16);
         });
     }
@@ -169,7 +169,7 @@ Appbase = {
         };
 
         var keyValFromArgs = function(prefix,key,val){
-            if(typeof val == 'undefined'){
+            if(typeof val === 'undefined'){
                 var val = key;
                 key = prefix;
             } else {
@@ -180,13 +180,13 @@ Appbase = {
         }
 
         var refineArgs = function(prefix,key,clone){
-            if(key == undefined && clone == undefined && prefix){
+            if(key === undefined && clone === undefined && prefix){
                 var key = prefix;
-            } else if(clone == undefined && typeof key == "boolean" && prefix){
+            } else if(clone === undefined && typeof key === "boolean" && prefix){
                 var clone = key;
                 key = prefix;
 
-            } else if(typeof key == "string" && prefix) {
+            } else if(typeof key === "string" && prefix) {
                 key = prefix+':'+key;
             } else {
                 throw 'Invalid arguments for getting from cache.'
@@ -238,7 +238,7 @@ Appbase = {
 
              */
 
-            if(val == undefined){
+            if(val === undefined){
                 amplify.store(key,null);
             } else {
                 amplify.store(key,beforeSave[prefix]? beforeSave[prefix](val):val);
@@ -335,7 +335,7 @@ Appbase = {
 
                             },function(error){
 
-                                if(error == ab.errors.vertex_not_found && ab.caching.get("creation",key).val){
+                                if(error === ab.errors.vertex_not_found && ab.caching.get("creation",key).val){
                                     //Vertex creation
                                     //TODO: serverside creation of UUIDs for new objects
                                     ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true}).then(function(){
@@ -389,7 +389,7 @@ Appbase = {
                 switch(what){
                     case 'uuid_path':
                         /*expected string*/
-                        if(typeof val != "string"){
+                        if(typeof val !== "string"){
                             reject('UUID must be a string');
                             return;
                         }
@@ -409,7 +409,7 @@ Appbase = {
 
                     case 'path_uuid':
                         /*expected string*/
-                        if(typeof val != "string"){
+                        if(typeof val !== "string"){
                             reject ('UUID must be a string');
                             return;
                         }
@@ -432,7 +432,7 @@ Appbase = {
                          */
 
 
-                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                        if(typeof val !== "object" || ! val.properties || typeof val.timestamp === 'undefined'){
                             reject ('Object not valid. 1');
                             return;
                         }
@@ -448,7 +448,7 @@ Appbase = {
 
                         if(extras.patch && storedVertex){
                             for(var prop in val.properties){
-                                val.properties[prop] == null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+                                val.properties[prop] === null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
                             }
 
                             val = storedVertex;
@@ -480,7 +480,7 @@ Appbase = {
                          }
                          */
 
-                        if(typeof val != "object" || ! val.properties || typeof val.timestamp == 'undefined'){
+                        if(typeof val !== "object" || ! val.properties || typeof val.timestamp === 'undefined'){
                             reject ('Object not valid. 3');
                             return;
                         }
@@ -503,7 +503,7 @@ Appbase = {
                             }
                         }
 
-                        if(typeof extras.shouldExist != 'undefined' ){
+                        if(typeof extras.shouldExist !== 'undefined' ){
                             ab.graph.storage.get('path_vertex',key,extras)
                                 .then(function(storedVertex){
 
@@ -515,7 +515,7 @@ Appbase = {
                                     }
                                 },function(error){
 
-                                    if(!extras.shouldExist && error == ab.errors.vertex_not_found ){
+                                    if(!extras.shouldExist && error === ab.errors.vertex_not_found ){
                                         storeNow();
                                     }
                                     else {
@@ -578,17 +578,17 @@ Appbase = {
                                 for(var edgeName in val){
                                     //TODO: timestamps, if no priority given in the local, server-timestamp is the priority
 
-                                    if(val[edgeName] && val[edgeName].priority == "time"){
+                                    if(val[edgeName] && val[edgeName].priority === "time"){
                                         val[edgeName].priority = val[edgeName].timestamp;
                                     }
 
                                     if(storedByName[edgeName]){ //Todo: ( && timestamp greater) )
 
-                                        if(val[edgeName] && val[edgeName].priority == undefined){
+                                        if(val[edgeName] && val[edgeName].priority === undefined){
                                             val[edgeName].priority = storedByName[edgeName].priority;
                                         }
 
-                                        if(val[edgeName] == null || storedByName[edgeName].priority == val[edgeName].priority){ //todo: 1)server delete flag 2)//todo: check for uuids
+                                        if(val[edgeName] === null || storedByName[edgeName].priority === val[edgeName].priority){ //todo: 1)server delete flag 2)//todo: check for uuids
                                             //remove edge
                                             toBeFired.push(['edge_removed',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName,priority:storedByName[edgeName].priority,prev_priority:storedByName[edgeName].priority}]); //todo: vertex
 
@@ -605,7 +605,7 @@ Appbase = {
                                             }
 
 
-                                        } else if(val[edgeName].priority != storedByName[edgeName].priority ){ //todo: check for uuids
+                                        } else if(val[edgeName].priority !== storedByName[edgeName].priority ){ //todo: check for uuids
 
                                             toBeFired.push(['edge_moved',key,ab.graph.path_vertex.getSync(extras.path+'/'+edgeName),{edgeName:edgeName,priority:val[edgeName].priority,prev_priority:storedByName[edgeName].priority}]); //todo: vertex
 
@@ -646,7 +646,7 @@ Appbase = {
                                 }
 
 
-                                if(val[edgeName].priority == undefined){
+                                if(val[edgeName].priority === undefined){
                                     val[edgeName].priority = val[edgeName].timestamp;
                                 }
 
@@ -727,7 +727,7 @@ Appbase = {
 
                          */
 
-                        if(typeof val != "object"){
+                        if(typeof val !== "object"){
                             reject ('Object not valid. 4');
                             return;
                         }
@@ -848,7 +848,7 @@ Appbase = {
                             ab.graph.path_vertex.get(path+'/'+edgeName).then(function(vertex){
                                 stepTwo();
                             },function(error){
-                                if(error == ab.errors.vertex_not_found){
+                                if(error === ab.errors.vertex_not_found){
                                     reject("Edge being modifed doesn't exist.");
                                 } else {
                                     reject(error);
@@ -971,13 +971,13 @@ Appbase = {
 
         ab.firing.edges.on = function(event,path,name,options,callback){
             //todo: check event
-            if(typeof name == "function" && callback == undefined && options==undefined){
+            if(typeof name === "function" && callback === undefined && options===undefined){
                 var callback = name;
                 name = undefined;
-            } else if(callback == undefined && typeof options == "function" && typeof name == "string"){
+            } else if(callback === undefined && typeof options === "function" && typeof name === "string"){
                 var callback = options;
                 options = undefined;
-            } else if(callback == undefined && typeof options == "function" && typeof name == "object") {
+            } else if(callback === undefined && typeof options === "function" && typeof name === "object") {
                 var callback = options;
                 options = name;
                 name = undefined;
@@ -989,14 +989,14 @@ Appbase = {
 
             ab.graph.path_out_edges.get(path)  //TODO: provide startAt,endAt
             .then(function(edges){
-                    if(event == "edge_added"){
+                    if(event === "edge_added"){
                         //fire for existing edges
 
 
                         //todo: reverse, skip
 
-                        var startAt = options && typeof options.startAt == 'number'? (edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt)!= undefined? edges.sortedPriorities.find(edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt).value).index: undefined):0;
-                        var endAt = options && typeof options.endAt == 'number'? (edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt)!= undefined? edges.sortedPriorities.find(edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt).value).index+1: undefined):edges.sortedPriorities.length; //inclusive
+                        var startAt = options && typeof options.startAt === 'number'? (edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findLeastGreaterThanOrEqual(options.startAt).value).index: undefined):0;
+                        var endAt = options && typeof options.endAt === 'number'? (edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt)!== undefined? edges.sortedPriorities.find(edges.sortedPriorities.findGreatestLessThanOrEqual(options.endAt).value).index+1: undefined):edges.sortedPriorities.length; //inclusive
 
                         if(startAt > endAt){
                             //swap
@@ -1007,7 +1007,7 @@ Appbase = {
                             //reverse = true;
                         }
 
-                        var priorities = (startAt != undefined && endAt != undefined)? edges.sortedPriorities.slice(startAt,endAt):[];
+                        var priorities = (startAt !== undefined && endAt !== undefined)? edges.sortedPriorities.slice(startAt,endAt):[];
 
                         for(var i = 0; (i< priorities.length) ;i++){
                             var priority = priorities[i];
@@ -1026,7 +1026,7 @@ Appbase = {
 
                         }
 
-                    } else if (event == 'edge_changed'){
+                    } else if (event === 'edge_changed'){
                         //todo: think: need anything special?
                     }
 
