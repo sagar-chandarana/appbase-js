@@ -104,6 +104,7 @@ Appbase = {
         ab.network.server = 'http://162.242.213.228:3000/';
 
         ab.network.properties = {};
+        ab.network.edges = {};
 
         ab.network.properties.listen = function(path,request,callback){
             if(!paths[path]) {
@@ -160,7 +161,7 @@ Appbase = {
         ab.network.properties.patch = function(path,data,timestamp,callback){
             var req = { timestamp: timestamp, data: data };
 
-            process(atomic.patch(request.path + '/~properties', req), callback);
+            process(atomic.patch(path + '/~properties', req), callback);
             /*
                 timestamp in request for strong PATCH.
 

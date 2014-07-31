@@ -1,4 +1,9 @@
+stopCount = 0;
+startCount = 0;
 count = 0;
+
+
+
 QUnit.module('hello');
 QUnit.test( "hello test", function( assert ) {
   assert.ok( 1 == "1", "Passed!" );
@@ -6,34 +11,21 @@ QUnit.test( "hello test", function( assert ) {
 
 QUnit.module('Libs');
 QUnit.test("required libraries",function(assert){
-    expect(8);
+    expect(9);
     assert.ok(Promise,"Promise exists");
     assert.ok(Promise.resolve,"Promise.resolve exists");
     assert.ok(Promise.all,"Promise.all exists");
     assert.ok(Promise.reject,"Promise.reject exists");
     assert.ok(Promise.denodeify,"Promise.denodeify exists");
 
-    assert.ok(io,'io exists');
+    assert.ok(atomic,'atomic');
+    assert.ok(SortedSet,'SortedSet');
+    assert.ok(amplify,'amplify')
 
-    assert.ok(io.connect,'io.connect exists');
-
-    assert.ok(Appbase,'Appbase exists');
+    assert.ok(Appbase,'Appbase');
 });
 
 var debugMode = Appbase.debug;
-/*
-QUnit.module('Appbase globals',{
-    setup: function() {
-        Appbase.debug = {
-            ignoreGlobals: true
-        }
-    },
-    teardown: function() {
-        Appbase.debug = {
-        }
-    }
-});
-*/
 
 QUnit.test("Appbase debug mode",function(assert){
     if(debugMode){
@@ -72,7 +64,6 @@ QUnit.test('Appbase.create should expect only two args, and strings should not c
     assert.ok(true,'Doesnt throw error');
 });
 */
-
 
 
 if(debugMode){
@@ -243,11 +234,13 @@ if(debugMode){
                     (testVars.type === "move") && expect(noOfExpectations += 9);
 
                     QUnit.stop();
+                    console.log('stop',stopCount+=1);
                     testOperands[operand].ref.edges[testVars.method](testVars.args,function(error){
                         assert.equal(error,false,operand+','+testNo+') '+testVars.testName);
 
                         Promise.all([Appbase.debug.ab.graph.storage.get('path_edges',testOperands[operand].path),testVars.args.ref !== undefined ?Appbase.debug.ab.graph.storage.get('path_vertex',testVars.args.ref.path()):undefined])
                             .then(function(array){
+
                                 var edges = array[0];
                                 if(testVars.type === "replace" || testVars.type === "remove"){
 
@@ -259,27 +252,28 @@ if(debugMode){
 
                                 if(testVars.type !== "remove"){
 
+
                                     testVars.obtained[operand].name = testVars.args.name !== undefined?testVars.args.name:array[1].uuid;
 
                                     assert.ok(edges.byName[testVars.obtained[operand].name],operand+','+testNo+') '+'byName-test1:edgeName');
 
                                     var prev_priority = testVars.basedOn !== undefined? edgesToTest[testVars.basedOn].obtained[operand].priority:undefined;
-                                    prev_priority !== undefined && (testOperands[operand].sortedPriorities.delete(prev_priority));
+                                    prev_priority !== undefined && (testOperands[operand].sortedEdgeSet.delete({priority:prev_priority,name:testVars.obtained[operand].name}));
 
                                     var expectedPriority = testVars.args.priority !== undefined? testVars.args.priority:prev_priority;
                                     expectedPriority = (expectedPriority === "time"? edges.byName[testVars.obtained[operand].name].timestamp:expectedPriority);
                                     testVars.obtained[operand].priority = edges.byName[testVars.obtained[operand].name].priority;
 
                                     assert.equal(testVars.obtained[operand].priority,expectedPriority,operand+','+testNo+') '+'byName-test2:priority');
-                                    testOperands[operand].sortedPriorities.add(expectedPriority);
+                                    testOperands[operand].sortedEdgeSet.add({priority:expectedPriority,name:testVars.obtained[operand].name});
 
                                     (testVars.type === "move") && assert.notEqual(prev_priority,expectedPriority,operand+','+testNo+') '+'Priority modified');
 
                                     assert.ok(edges.byPriority[expectedPriority].indexOf(testVars.obtained[operand].name) > -1,operand+','+testNo+') '+'byPriority object');
 
                                     (testVars.type === "move") && assert.ok(edges.byPriority[prev_priority].indexOf(testVars.obtained[operand].name) === -1,operand+','+testNo+') '+'byPriority object - old priority is gone');
-                                    assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
-                                    assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
+                                    assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedEdgeSet.min().priority,operand+','+testNo+') '+'lowest priority');
+                                    assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedEdgeSet.max().priority,operand+','+testNo+') '+'highest priority');
 
                                     testVars.obtained[operand].path = testOperands[operand].path+'/'+testVars.obtained[operand].name;
 
@@ -288,24 +282,32 @@ if(debugMode){
 
                                 } else {
 
+                                    console.log('removing',count+=1);
                                     assert.ok(testVars.deleted[operand].name,operand+','+testNo+') '+"There's an edge to delete");
                                     assert.ok(testVars.deleted[operand].priority !== undefined && typeof testVars.deleted[operand].priority === "number",operand+','+testNo+') '+'Deleted edge had a priority');
 
-                                    edges.byPriority[testVars.deleted[operand].priority].length === 0 && (testOperands[operand].sortedPriorities.delete(testVars.deleted[operand].priority));
+
+                                    (testOperands[operand].sortedEdgeSet.delete({priority:testVars.deleted[operand].priority,name:testVars.deleted[operand].name}));
 
                                     assert.ok(!edges.byName[testVars.deleted[operand].name],operand+','+testNo+') '+'byName object');
 
                                     assert.ok(edges.byPriority[testVars.deleted[operand].priority].indexOf(testVars.deleted[operand].name) === -1,operand+','+testNo+') '+'byPriority object');
-                                    assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedPriorities.min(),operand+','+testNo+') '+'lowest priority');
-                                    assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedPriorities.max(),operand+','+testNo+') '+'highest priority');
+
+                                    assert.equal(edges.sortedPriorities.min(),testOperands[operand].sortedEdgeSet.min()!== undefined? testOperands[operand].sortedEdgeSet.min().priority:undefined,operand+','+testNo+') '+'lowest priority');
+                                    assert.equal(edges.sortedPriorities.max(),testOperands[operand].sortedEdgeSet.max()!== undefined? testOperands[operand].sortedEdgeSet.max().priority:undefined,operand+','+testNo+') '+'highest priority');
+
                                     assert.equal(Appbase.debug.ab.caching.get('path_uuid',testOperands[operand].path+'/'+testVars.deleted[operand].name).val,undefined,operand+','+testNo+') '+'edge-path removed');
 
                                 }
+                                console.log('start',startCount+=1);;
                                 QUnit.start();
+
 
                             },function(error){
                                 assert.equal(error,'',operand+','+testNo+') '+'error aayo');
+                                console.log('start',startCount+=1);;
                                 QUnit.start();
+
                             });
 
                     });
@@ -320,25 +322,28 @@ if(debugMode){
 
                     switch(event){
                         case 'add':
-                            expect(noOfExpectations+=3 * testOperands[operand].eventsExpected[event].length);
-                            testNo == 5 && console.log(testOperands[operand].eventsExpected[event].length);
-                            QUnit.stop(testOperands[operand].eventsExpected[event].length);
+                            expect(noOfExpectations+=2 * testOperands[operand].sortedEdgeSet.length);
+
+                            QUnit.stop(testOperands[operand].sortedEdgeSet.length);
+                            for(var i =0;i<testOperands[operand].sortedEdgeSet.length;i++)
+                                console.log('stop',stopCount+=1);
 
                             var fireCount = 0;
                             var listener = testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
-                                //console.log(testOperands[operand].eventsExpected.add[fireCount])
-                                var testNo = testOperands[operand].eventsExpected.add[fireCount];
-                                fireCount += 1;
-                                testNo == 5 && console.log(count +=1,testNo);
 
-                                assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
+                                var edge = testOperands[operand].sortedEdgeSet.slice(fireCount,fireCount+1)[0];
+                                fireCount += 1
+
+                                //assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_added:'+edgeRef.path());
-                                assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].obtained[operand].name,operand+','+testNo+') '+"Fired ref's path is as expected");
+                                assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edge.name,operand+') '+"Fired ref's path is as expected");
 
                                 //TODO: snapshot
 
                                 testOperands[operand].ref.edges.off('edge_added',listener);
+                                console.log('start',startCount+=1);;
                                 QUnit.start();
+
                             })
 
                             break;
@@ -346,31 +351,30 @@ if(debugMode){
                         case 'remove':
                             expect(noOfExpectations+=3);
                             QUnit.stop();
+                            console.log('stop',stopCount+=1);
                             var listener = testOperands[operand].ref.edges.on('edge_removed',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
+
                                 var testNo = testOperands[operand].eventsExpected.remove.shift();
                                 assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
                                 assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted[operand].name,operand+','+testNo+') '+"Fired ref's path is as expected");
 
-                                testNo == 5 && console.log(count +=1,testNo);
                                 //TODO: snapshot
                                 testOperands[operand].ref.edges.off('edge_removed',listener);
-                                //console.log(count,testNo);
+
+                                console.log('start',startCount+=1);;
                                 QUnit.start();
-                                /*
-                                 Promise.all([Appbase.debug.ab.graph.path_vertex.get(edgeRef.path()),Appbase.debug.ab.graph.path_vertex.get(edgesToTest[testNo].args.ref.path())]).then(function(vertexes){
-                                 assert.deepEqual(vertexes[0],vertexes[1],operand+','+testNo+') '+'Fired refs point to proper vertex');
-                                 },function(error){
-                                 assert.equal(error,'',operand+','+testNo+') '+'error aayo');
-                                 });
-                                 */
+
+
                             })
                             break;
 
                         case 'move':
                             expect(noOfExpectations+=3);
                             QUnit.stop();
+                            console.log('stop',stopCount+=1);
                             var listener = testOperands[operand].ref.edges.on('edge_moved',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
+
                                 var testNo = testOperands[operand].eventsExpected.move.shift();
                                 assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_moved:'+edgeRef.path());
@@ -378,7 +382,10 @@ if(debugMode){
 
                                 //TODO: snapshot
                                 testOperands[operand].ref.edges.off('edge_moved',listener);
+                                console.log('start',startCount+=1);;
                                 QUnit.start();
+
+
                             })
                             break;
 
@@ -566,26 +573,64 @@ if(debugMode){
             basedOn:8
         }
 
+        var newSortedEdgeSet = function(){
+            return new SortedSet([],undefined,function(a,b){
+                if(a.priority< b.priority)
+                    return -1;
+
+                if(a.priority> b.priority)
+                    return 1;
+
+                if(a.name < b.name)
+                    return -1;
+
+                if(a.name > b.name)
+                    return 1;
+
+                return 0;
+            });
+        }
+
         var testOperands = [];
         testOperands[0]= {};
         testOperands[0].collection = 'lol';
         testOperands[0].key = 'rofl';
         testOperands[0].ref = Appbase.create(testOperands[0].collection,testOperands[0].key);
         testOperands[0].path = testOperands[0].ref.path();
-        testOperands[0].sortedPriorities = new SortedSet();
+        lol = testOperands[0].sortedEdgeSet = newSortedEdgeSet();
 
         testOperands[1] = {};
         testOperands[1].refFromTest = {operand:0,testNo:9};
-        testOperands[1].sortedPriorities = new SortedSet();
+        testOperands[1].sortedEdgeSet = newSortedEdgeSet();
 
         testOperands[2] = {};
         testOperands[2].refFromTest = {operand:1,testNo:8};
-        testOperands[2].sortedPriorities = new SortedSet();
+        testOperands[2].sortedEdgeSet = newSortedEdgeSet();
 
         var testSequence = [
             {
                 operand:0,
                 startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:1,
+                startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:2,
+                startEdge:0,
+                endEdge:12
+            },
+            {
+                operand:1,
+                startEdge:10,
+                endEdge:12
+            },
+            {
+                operand:0,
+                startEdge:10,
                 endEdge:12
             }
         ];
@@ -593,11 +638,6 @@ if(debugMode){
         //TODO: tests for edges pointing to the same vertex
         //TODO: edges with deeper paths
 
-        var testEvents = function(operand){
-
-
-
-        }
 
         for(var testSeqN=0;testSeqN<testSequence.length;testSeqN++){
 
