@@ -456,11 +456,11 @@ Appbase = {
     ab.graph.init = function(){
         ab.graph.storage = {};
 
+
+
         ab.graph.storage.get = function(what,key,extras){
 
             return new Promise(function(resolve,reject){
-
-
                 var cached = ab.caching.get(what,key,extras? extras.clone:undefined);
 
                 switch(what){
