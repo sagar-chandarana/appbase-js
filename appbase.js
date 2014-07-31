@@ -138,12 +138,18 @@ Appbase = {
         ab.network.properties.listenUseful = function(path,callback,listenCallback){
             ab.network.properties.get(path,{},function(error,obj){
                 if(!error){
-                    callback(error,obj?obj.vertex:undefined);
+                    //converting for internal use
+                    var vertex = {timestamp:obj.vertex.timestamp,uuid:obj.vertex._id};
+                    delete obj.vertex._id;
+                    delete obj.vertex.timestamp;
+                    vertex.properties = obj.vertex;
+
+                    callback(error,obj?vertex:undefined);
 
                     if(listenCallback && obj){
-                        listenCallback(error,obj.vertex);
+                        listenCallback(error,vertex);
 
-                        ab.network.properties.listen(path,{timestamp:obj.vertex.timestamp},function(error){
+                        ab.network.properties.listen(path,{timestamp:vertex.timestamp},function(error){
                             if(!error){
                                 ab.network.properties.listenUseful(path,listenCallback,false);
                             } else {
@@ -653,7 +659,7 @@ Appbase = {
 
                         var storedVertex;
 
-                        if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
+                        if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp && storedVertex.uuid == val.uuid ){
                             resolve(); //ignore
                             return;
                         }
@@ -677,7 +683,6 @@ Appbase = {
                             ab.caching.set(what,key,val);
                             resolve();
 
-                            console.log(val.prev)
                             val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
                         }
 
