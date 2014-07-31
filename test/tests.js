@@ -323,17 +323,17 @@ if(debugMode){
                     switch(event){
                         case 'add':
                             expect(noOfExpectations+=2 * testOperands[operand].sortedEdgeSet.length);
-                            //console.log(testOperands[operand].sortedEdgeSet.length);
+
                             QUnit.stop(testOperands[operand].sortedEdgeSet.length);
                             for(var i =0;i<testOperands[operand].sortedEdgeSet.length;i++)
                                 console.log('stop',stopCount+=1);
 
                             var fireCount = 0;
                             var listener = testOperands[operand].ref.edges.on('edge_added',function(error,edgeRef,vertexSnapshot,edgeSnapshot){
-                                //console.log(testOperands[operand].eventsExpected.add[fireCount])
-                                //count +=1//console.log('fired',);
+
                                 var edge = testOperands[operand].sortedEdgeSet.slice(fireCount,fireCount+1)[0];
-                                fireCount += 1//console.log('local fired',);
+                                fireCount += 1
+
                                 //assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_added:'+edgeRef.path());
                                 assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edge.name,operand+') '+"Fired ref's path is as expected");
@@ -358,12 +358,10 @@ if(debugMode){
                                 assert.ok(testNo!== undefined,operand+','+testNo+') '+'Event was expected to fire');
                                 assert.equal(error,false,operand+','+testNo+') '+'Event: edge_removed:'+edgeRef.path());
                                 assert.equal(edgeRef.path(),testOperands[operand].path+'/'+edgesToTest[testNo].deleted[operand].name,operand+','+testNo+') '+"Fired ref's path is as expected");
-                                //testNo == 12 && console.log(testNo);
 
                                 //TODO: snapshot
                                 testOperands[operand].ref.edges.off('edge_removed',listener);
-                                //testNo == 12 && console.log(testNo);
-                                //console.log(count,testNo);
+
                                 console.log('start',startCount+=1);;
                                 QUnit.start();
 
@@ -613,6 +611,26 @@ if(debugMode){
             {
                 operand:0,
                 startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:1,
+                startEdge:0,
+                endEdge:9
+            },
+            {
+                operand:2,
+                startEdge:0,
+                endEdge:12
+            },
+            {
+                operand:1,
+                startEdge:10,
+                endEdge:12
+            },
+            {
+                operand:0,
+                startEdge:10,
                 endEdge:12
             }
         ];
