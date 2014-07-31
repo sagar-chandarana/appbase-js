@@ -11,18 +11,18 @@ QUnit.test( "hello test", function( assert ) {
 
 QUnit.module('Libs');
 QUnit.test("required libraries",function(assert){
-    expect(8);
+    expect(9);
     assert.ok(Promise,"Promise exists");
     assert.ok(Promise.resolve,"Promise.resolve exists");
     assert.ok(Promise.all,"Promise.all exists");
     assert.ok(Promise.reject,"Promise.reject exists");
     assert.ok(Promise.denodeify,"Promise.denodeify exists");
 
-    assert.ok(io,'io exists');
+    assert.ok(atomic,'atomic');
+    assert.ok(SortedSet,'SortedSet');
+    assert.ok(amplify,'amplify')
 
-    assert.ok(io.connect,'io.connect exists');
-
-    assert.ok(Appbase,'Appbase exists');
+    assert.ok(Appbase,'Appbase');
 });
 
 var debugMode = Appbase.debug;
