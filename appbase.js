@@ -78,7 +78,7 @@ Appbase = {
             request
             .success(function(data) {
                 if(typeof data === 'string') {
-                    callback(new Error(string));
+                    callback(new Error(data));
                 } else {
                     callback(null, data);
                     if(typeof listen === 'function') {
@@ -135,6 +135,30 @@ Appbase = {
              */
         }
 
+        ab.network.properties.listenUseful = function(path,callback,listenCallback){
+            ab.network.properties.get(path,{},function(error,obj){
+                if(!error){
+                    callback(error,obj?obj.vertex:undefined);
+
+                    if(listenCallback && obj){
+                        listenCallback(error,obj.vertex);
+
+                        ab.network.properties.listen(path,{timestamp:obj.vertex.timestamp},function(error){
+                            if(!error){
+                                ab.network.properties.listenUseful(path,listenCallback,false);
+                            } else {
+                                //TODO: do what?
+                            }
+
+                        });
+                    }
+                } else {
+                    callback(error);
+                }
+            });
+
+        }
+
         ab.network.properties.get = function(path, request,callback){
             var req = { timestamp: request.timestamp, all: true };
 
@@ -176,7 +200,7 @@ Appbase = {
         ab.network.properties.remove = function(path,names,all,callback){
             var req = { data: names, all: all };
 
-            process(atomic.delete(request.path + '/~properties', req), callback);
+            process(atomic.delete(path + '/~properties', req), callback);
 
             /*
 
@@ -469,6 +493,15 @@ Appbase = {
                             resolve(cached.val);
                         } else {
 
+                            ab.network.properties.listenUseful(key,function(error,vertex){
+                                if(!error){
+                                    ab.graph.storage.set('path_vertex',key,vertex).then(resolve,reject);
+                                } else {
+                                    reject(error);
+                                }
+
+                            });
+
                             /*TODO: fetch from server
                              amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
                              error && reject(error);
@@ -480,7 +513,6 @@ Appbase = {
                              })
                              */
 
-                            reject(ab.errors.vertex_not_found) //for now, as server is not available
                             return;
                         }
                         //todo: cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
