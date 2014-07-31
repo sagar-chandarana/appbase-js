@@ -136,22 +136,24 @@ Appbase = {
         }
 
         ab.network.properties.listenUseful = function(path,callback,listenCallback){
+
             ab.network.properties.get(path,{},function(error,obj){
-                if(!error){
+                if(!error && obj){
                     //converting for internal use
                     var vertex = {timestamp:obj.vertex.timestamp,uuid:obj.vertex._id};
                     delete obj.vertex._id;
                     delete obj.vertex.timestamp;
                     vertex.properties = obj.vertex;
 
-                    callback(error,obj?vertex:undefined);
+                    callback(error,vertex);
 
-                    if(listenCallback && obj){
+                    if(listenCallback !== undefined && obj){
                         listenCallback(error,vertex);
 
-                        ab.network.properties.listen(path,{timestamp:vertex.timestamp},function(error){
+                        ab.network.properties.get(path,{timestamp:vertex.timestamp},function(error){
+                            console.log('listen fuckup');
                             if(!error){
-                                ab.network.properties.listenUseful(path,listenCallback,false);
+                                ab.network.properties.listenUseful(path,listenCallback);
                             } else {
                                 //TODO: do what?
                             }
@@ -558,10 +560,14 @@ Appbase = {
                                 if(error === ab.errors.vertex_not_found && ab.caching.get("creation",key).val){
                                     //Vertex creation
                                     //TODO: serverside creation of UUIDs for new objects
-                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true,create:true}).then(function(){
-                                        ab.caching.clear("creation",key);
-                                        return ab.graph.storage.get('path_vertex',key);
-                                    }).then(resolve,reject);
+                                    ab.network.properties.patch(extras.path,{},undefined,function(error,obj){
+                                        if(!error){
+                                            ab.caching.clear("creation",key);
+                                            ab.graph.storage.get('path_vertex',key).then(resolve,reject);
+                                        } else {
+                                            reject(error);
+                                        }
+                                    })
 
                                 } else {
                                     reject(error);
