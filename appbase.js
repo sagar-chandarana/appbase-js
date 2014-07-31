@@ -104,6 +104,7 @@ Appbase = {
         ab.network.server = 'http://162.242.213.228:3000/';
 
         ab.network.properties = {};
+        ab.network.edges = {};
 
         ab.network.properties.listen = function(path,request,callback){
             if(!paths[path]) {
