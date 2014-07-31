@@ -15,4 +15,4 @@ Appbase.debug.ab.network.properties.listenUseful(path,function(error,vertex){
 
 data = ['prop'];
 
-//ab.network.properties.remove(path,data,false,function(error,vertex){console.log('d',error,vertex)})
+ab.network.properties.remove(path,data,false,function(error,vertex){console.log('d',error,vertex)})
