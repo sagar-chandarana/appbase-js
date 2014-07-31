@@ -40,7 +40,7 @@
         }
       }
     };
-    request.send(data);
+    request.send(JSON.stringify(data));
     var callbacks = {
       success: function (callback) {
         methods.success = callback;
