@@ -88,11 +88,11 @@ Appbase = {
             })
             .error(function(data) {
                 if(typeof data === 'string') {
-                    callback(new Error(data));
+                    callback(data);
                 } else if(data && typeof data.message === 'string') {
-                    callback(new Error(data.message));
+                    callback(data.message);
                 } else {
-                    callback(new Error('Unknown Error'));
+                    callback('Unknown Error');
                     console.log(data);
                 }
             });
