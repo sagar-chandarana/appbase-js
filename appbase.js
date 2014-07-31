@@ -1354,11 +1354,24 @@ Appbase = {
                 vertex.properties[prop] = val;
                 vertex.timestamp = ab.util.timestamp();
 
-                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
-                    localCallback && localCallback(false);
-                },localCallback ? localCallback: function(error){
-                    throw error;
-                });
+                ab.network.properties.patch(priv.path,vertex.properties,undefined,function(error,obj){
+                    if(!error){
+                        vertex.timestamp = obj.timestamp;
+                        ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+
+                            localCallback && localCallback(false);
+                        },localCallback ? localCallback: function(error){
+                            throw error;
+                        });
+                    } else {
+                        if(localCallback)
+                            localCallback(error)
+                        else
+                            throw error;
+                    }
+
+                })
+
             }
 
             exports.properties.commit = function(prop,apply,localCallback){
@@ -1370,11 +1383,22 @@ Appbase = {
                 vertex.properties[prop] = null;
                 vertex.timestamp = ab.util.timestamp();
 
-                ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
-                    localCallback && localCallback(false);
-                },localCallback ? localCallback: function(error){
-                    throw error;
-                });
+                ab.network.properties.patch(priv.path,[prop],undefined,function(error,obj){ //todo: timestamp
+                    if(!error){
+                        vertex.timestamp = obj.timestamp;
+                        ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
+                            localCallback && localCallback(false);
+                        },localCallback ? localCallback: function(error){
+                            throw error;
+                        });
+                    } else {
+                        if(localCallback)
+                            localCallback(error)
+                        else
+                            throw error;
+                    }
+
+                })
             }
 
             exports.destroy = function(localCallback){
