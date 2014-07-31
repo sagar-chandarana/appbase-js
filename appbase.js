@@ -461,7 +461,7 @@ Appbase = {
             return new Promise(function(resolve,reject){
 
 
-                var cached = ab.caching.get(what,key);
+                var cached = ab.caching.get(what,key,extras? extras.clone:undefined);
 
                 switch(what){
                     case 'path_uuid':
@@ -529,7 +529,7 @@ Appbase = {
                                 if(error === ab.errors.vertex_not_found && ab.caching.get("creation",key).val){
                                     //Vertex creation
                                     //TODO: serverside creation of UUIDs for new objects
-                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true}).then(function(){
+                                    ab.graph.storage.set(what,key,{uuid:ab.util.uuid(),timestamp:ab.util.timestamp(),properties:{}},{isLocal:true,create:true}).then(function(){
                                         ab.caching.clear("creation",key);
                                         return ab.graph.storage.get('path_vertex',key);
                                     }).then(resolve,reject);
@@ -628,34 +628,47 @@ Appbase = {
                             return;
                         }
 
-
-                        var cached = ab.caching.get(what,key,true);
-                        var storedVertex = cached.val;
+                        var storedVertex;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp){
                             resolve(); //ignore
                             return;
                         }
 
-                        if(extras.patch && storedVertex){
-                            for(var prop in val.properties){
-                                val.properties[prop] === null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+
+                        var storeNow = function(){
+
+                            if(extras.patch && storedVertex){
+                                for(var prop in val.properties){
+                                    val.properties[prop] === null? delete storedVertex.properties[prop] : storedVertex.properties[prop] = val.properties[prop];
+                                }
+
+                                val = storedVertex;
                             }
 
-                            val = storedVertex;
+                            //todo: preserve server's version, with a timestamp
+                            val.prev = ab.caching.get(what,key).val;
+                            val.prev && delete val.prev.prev; //delete older state
+
+
+                            ab.caching.set(what,key,val);
+                            resolve();
+
+                            console.log(val.prev)
+                            val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
                         }
 
-                        //todo: preserve server's version, with a timestamp
-                        val.prev = ab.caching.get(what,key).val;
-                        val.prev && delete val.prev.prev; //delete older state
+                        if(extras.isLocal && !extras.create){
+                            var extrasNew = Object.clone(extras);
+                            extrasNew.clone = true;
+                            ab.graph.storage.get(what,key,extrasNew).then(function(vertex){
+                                storedVertex = vertex;
+                                storeNow();
+                            },reject);
+                        } else {
+                            storeNow();
+                        }
 
-
-                        ab.caching.set(what,key,val);
-                        resolve();
-
-
-
-                        val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
 
                         break;
 
