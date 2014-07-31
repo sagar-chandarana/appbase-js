@@ -543,6 +543,7 @@ Appbase = {
                         ab.graph.storage.get('path_uuid',key)
                             .then(function(uuid){
 
+
                                 if(!extras)
                                     var extras = {};
 
@@ -553,6 +554,7 @@ Appbase = {
                             .then(function(vertex){
 
                                 ab.caching.clear("creation",key);
+                                console.log('yo');
                                 resolve(vertex);
 
                             },function(error){
@@ -561,8 +563,10 @@ Appbase = {
                                     //Vertex creation
                                     //TODO: serverside creation of UUIDs for new objects
                                     ab.network.properties.patch(extras.path,{},undefined,function(error,obj){
+
                                         if(!error){
                                             ab.caching.clear("creation",key);
+
                                             ab.graph.storage.get('path_vertex',key).then(resolve,reject);
                                         } else {
                                             reject(error);
@@ -646,7 +650,6 @@ Appbase = {
                         break;
 
                     case 'uuid_vertex':
-
                         /*
                          obj expected:
                          {
@@ -666,6 +669,8 @@ Appbase = {
                         var storedVertex;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp && storedVertex.uuid == val.uuid ){
+
+
                             resolve(); //ignore
                             return;
                         }
@@ -687,6 +692,7 @@ Appbase = {
 
 
                             ab.caching.set(what,key,val);
+                            console.log(4);
                             resolve();
 
                             val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
@@ -708,6 +714,7 @@ Appbase = {
 
 
                     case 'path_vertex':
+                        console.log(1);
                         /*
                          obj expected:
                          {
@@ -729,11 +736,13 @@ Appbase = {
 
                             if(!val.uuid){
                                 ab.graph.storage.get('path_uuid',key).then(function(uuid){
+                                    console.log(2);
                                     ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
                                 },reject);
 
                             } else {
                                 ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
+                                    console.log(3);
                                     ab.graph.storage.set('uuid_vertex',val.uuid,val,extras).then(resolve,reject);
                                 },reject);
 
@@ -1366,6 +1375,8 @@ Appbase = {
                 vertex.timestamp = ab.util.timestamp();
 
                 ab.network.properties.patch(priv.path,vertex.properties,undefined,function(error,obj){
+                    console.log(obj);
+
                     if(!error){
                         vertex.timestamp = obj.timestamp;
                         ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
@@ -1394,7 +1405,8 @@ Appbase = {
                 vertex.properties[prop] = null;
                 vertex.timestamp = ab.util.timestamp();
 
-                ab.network.properties.patch(priv.path,[prop],undefined,function(error,obj){ //todo: timestamp
+                ab.network.properties.remove(priv.path,new Array(prop),undefined,function(error,obj){ //todo: timestamp
+                    console.log(error,obj);
                     if(!error){
                         vertex.timestamp = obj.timestamp;
                         ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
