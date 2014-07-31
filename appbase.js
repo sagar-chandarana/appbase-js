@@ -150,7 +150,7 @@ Appbase = {
                     if(listenCallback !== undefined && obj){
                         listenCallback(error,vertex);
 
-                        ab.network.properties.listen(path,{timestamp:vertex.timestamp},function(error){
+                        ab.network.properties.get(path,{timestamp:vertex.timestamp},function(error){
                             console.log('listen fuckup');
                             if(!error){
                                 ab.network.properties.listenUseful(path,listenCallback);
