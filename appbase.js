@@ -495,45 +495,36 @@ Appbase = {
 
                             ab.network.properties.listenUseful(key,function(error,vertex){
                                 if(!error){
-                                    ab.graph.storage.set('path_vertex',key,vertex).then(resolve,reject);
+                                    resolve(vertex.uuid);
                                 } else {
                                     reject(error);
                                 }
 
+                            },function(error,vertex){
+                                ab.graph.storage.set('path_vertex',key,vertex);
                             });
-
-                            /*TODO: fetch from server
-                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                             error && reject(error);
-
-                             obj && resolve(ab.caching.inMemory[uuid]);
-                             !obj && resolve(false);
-
-                             amplify.unsubscribe(topic,listenerName);
-                             })
-                             */
 
                             return;
                         }
-                        //todo: cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+
                         break;
 
                     case 'uuid_vertex':
-                        if(cached.val){
+                        if(cached.val && ab.network.properties.isListening(extras.path)){
                             resolve(cached.val);
                         } else {
-                            /*TODO: fetch from server, according to timestamp
-                             amplify.subscribe('fromServer:'+uuid,function(error,arrived_uuid,obj,topic,listenerName){
-                             error && reject(error);
 
-                             obj && resolve(ab.caching.inMemory[uuid]);
-                             !obj && resolve(false);
+                            ab.network.properties.listenUseful(extras.path,function(error,vertex){
+                                if(!error){
+                                    resolve(vertex.uuid);
+                                } else {
+                                    reject(error); //todo: return cached data on network error
+                                }
 
-                             amplify.unsubscribe(topic,listenerName);
-                             })
-                             */
+                            },function(error,vertex){
+                                ab.graph.storage.set('path_vertex',extras.path,vertex);
+                            });
 
-                            reject(ab.errors.vertex_not_found); //for now, as server is not available
                             return;
                         }
                         //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
@@ -932,7 +923,7 @@ Appbase = {
                                     if(storedVertex){
                                         storeNow();
                                     } else {
-                                        reject("Vertex not found.")
+                                        reject(ab.errors.vertex_not_found);
                                         return;
                                     }
 
@@ -1467,7 +1458,7 @@ Appbase = {
     }
 
     ab.errors.init = function(){
-        ab.errors.vertex_not_found = "Vertex not found."
+        ab.errors.vertex_not_found = "101: Resource does not exist"
         ab.errors.vertex_exists = "Vertex already exists."
     }
 
