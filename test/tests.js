@@ -145,7 +145,6 @@ if(debugMode){
                 QUnit.start();
             });
         });
-
     });
 /*
 

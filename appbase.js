@@ -151,7 +151,7 @@ Appbase = {
                         listenCallback(error,vertex);
 
                         ab.network.properties.get(path,{timestamp:vertex.timestamp},function(error){
-                            console.log('listen fuckup');
+                            console.log('new data');
                             if(!error){
                                 ab.network.properties.listenUseful(path,listenCallback);
                             } else {
@@ -206,6 +206,7 @@ Appbase = {
         }
 
         ab.network.properties.remove = function(path,names,all,callback){
+            console.log(names);
             var req = { data: names, all: all };
 
             process(atomic.delete(path + '/~properties', req), callback);
@@ -524,7 +525,7 @@ Appbase = {
 
                             ab.network.properties.listenUseful(extras.path,function(error,vertex){
                                 if(!error){
-                                    resolve(vertex.uuid);
+                                    resolve(vertex);
                                 } else {
                                     reject(error); //todo: return cached data on network error
                                 }
@@ -535,7 +536,7 @@ Appbase = {
 
                             return;
                         }
-                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
+
                         break;
 
                     case 'path_vertex':
@@ -554,7 +555,6 @@ Appbase = {
                             .then(function(vertex){
 
                                 ab.caching.clear("creation",key);
-                                console.log('yo');
                                 resolve(vertex);
 
                             },function(error){
@@ -588,7 +588,6 @@ Appbase = {
                             resolve ({byName:{},byPriority:{},sortedPriorities: new SortedSet()}); //empty object, as server is not available, and the assumption is path_uuid exists, but there are no edges for this uuid.
                         }
 
-                        //cached.isFresh && amplify.publish('toServer:listen_to_data',uuid);
                         break;
 
                     case 'path_edges':
@@ -660,16 +659,14 @@ Appbase = {
                          }
                          */
 
-
                         if(typeof val !== "object" || ! val.properties || typeof val.timestamp === 'undefined'){
                             reject ('Object not valid. 1');
                             return;
                         }
 
-                        var storedVertex;
+                        var storedVertex = ab.caching.get(what,key).val;
 
                         if(!extras.isLocal && val.timestamp && storedVertex && storedVertex.timestamp >= val.timestamp && storedVertex.uuid == val.uuid ){
-
 
                             resolve(); //ignore
                             return;
@@ -692,7 +689,6 @@ Appbase = {
 
 
                             ab.caching.set(what,key,val);
-                            console.log(4);
                             resolve();
 
                             val.prev && ab.firing.fire('properties',key,val); //fire only if there's a previous version, i.e. the properties are 'modified'
@@ -714,7 +710,6 @@ Appbase = {
 
 
                     case 'path_vertex':
-                        console.log(1);
                         /*
                          obj expected:
                          {
@@ -725,6 +720,7 @@ Appbase = {
                          }
                          */
 
+                        //console.log('setting: path_vertex',key,val);
                         if(typeof val !== "object" || ! val.properties || typeof val.timestamp === 'undefined'){
                             reject ('Object not valid. 3');
                             return;
@@ -736,13 +732,13 @@ Appbase = {
 
                             if(!val.uuid){
                                 ab.graph.storage.get('path_uuid',key).then(function(uuid){
-                                    console.log(2);
+                                    //console.log('got uuid',key,val);
                                     ab.graph.storage.set('uuid_vertex',uuid,val,extras).then(resolve,reject);
                                 },reject);
 
                             } else {
                                 ab.graph.storage.set('path_uuid',key,val.uuid).then(function(){
-                                    console.log(3);
+                                    //console.log('set uuid',key,val);
                                     ab.graph.storage.set('uuid_vertex',val.uuid,val,extras).then(resolve,reject);
                                 },reject);
 
@@ -1375,12 +1371,10 @@ Appbase = {
                 vertex.timestamp = ab.util.timestamp();
 
                 ab.network.properties.patch(priv.path,vertex.properties,undefined,function(error,obj){
-                    console.log(obj);
 
                     if(!error){
                         vertex.timestamp = obj.timestamp;
                         ab.graph.path_vertex.set(priv.path,vertex,{isLocal:true,shouldExist:true,patch:true}).then(function(){
-
                             localCallback && localCallback(false);
                         },localCallback ? localCallback: function(error){
                             throw error;
@@ -1405,7 +1399,7 @@ Appbase = {
                 vertex.properties[prop] = null;
                 vertex.timestamp = ab.util.timestamp();
 
-                ab.network.properties.remove(priv.path,new Array(prop),undefined,function(error,obj){ //todo: timestamp
+                ab.network.properties.remove(priv.path,[prop],undefined,function(error,obj){ //todo: timestamp
                     console.log(error,obj);
                     if(!error){
                         vertex.timestamp = obj.timestamp;
