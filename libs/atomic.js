@@ -63,8 +63,8 @@
     return xhr('PATCH', url, data);
   };
 
-  exports['delete'] = function (url) {
-    return xhr('DELETE', url);
+  exports['delete'] = function (url, data) {
+    return xhr('DELETE', url, data);
   };
 
   return exports;
